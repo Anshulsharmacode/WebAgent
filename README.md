@@ -72,3 +72,50 @@ backend/
 ├── backend/
 ├── frontend/
 └── docker-compose.yml
+
+myproject/
+│
+├── manage.py
+├── myproject/
+│ ├── settings.py
+│ ├── urls.py
+│
+├── apps/
+│ └── builder/ ← your main app
+│ ├── migrations/
+│ ├── **init**.py
+│ ├── admin.py
+│ ├── apps.py
+│
+│ ├── models.py ← Project + ChatMessage
+│ ├── views.py ← API endpoints
+│ ├── urls.py
+│
+│ ├── services/ ← CORE LOGIC (important)
+│ │ ├── **init**.py
+│ │ ├── llm.py ← LLM calls
+│ │ ├── generator.py ← create files
+│ │ ├── docker.py ← run containers
+│ │ └── chat.py ← orchestration logic
+│
+│ ├── schemas/ ← JSON schema definitions
+│ │ └── website_schema.py
+│
+│ ├── utils/ ← helpers
+│ │ └── validators.py
+│
+│ ├── templates/
+│ │ └── builder/
+│ │ └── index.html
+│
+│ └── static/
+│ └── builder/
+│ ├── css/
+│ └── js/
+│
+├── generated_sites/ ← GENERATED CODE (runtime)
+│ └── project_1/
+│ ├── index.html
+│ ├── Dockerfile
+│
+└── requirements.txt

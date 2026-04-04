@@ -3,3 +3,5 @@
 README.md
 __pycache__
 db.sqlite3
+.env
+generated_sites
