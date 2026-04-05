@@ -31,6 +31,7 @@ def build_website(request):
             prompt=prompt,
             project_name=payload.get("project_name"),
             port=payload.get("port"),
+            project_type=payload.get("project_type", "classic_html"),
         )
         return JsonResponse(result, status=201)
     except Exception as exc:
@@ -58,6 +59,7 @@ def chat_website(request):
             project_dir=payload.get("project_dir"),
             project_name=payload.get("project_name"),
             container_name=payload.get("container_name"),
+            project_type=payload.get("project_type"),
         )
         return JsonResponse(result, status=200)
     except Exception as exc:

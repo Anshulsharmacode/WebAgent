@@ -109,6 +109,8 @@ if "active_site_url" not in st.session_state:
     st.session_state.active_site_url = ""
 if "preview_token" not in st.session_state:
     st.session_state.preview_token = 0
+if "project_type" not in st.session_state:
+    st.session_state.project_type = "classic_html"
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = [
         {
@@ -164,6 +166,12 @@ with st.sidebar:
     timeout_sec = st.slider("API timeout (sec)", min_value=20, max_value=600, value=180, step=10)
 
     st.markdown("### Prompt to Website")
+    st.session_state.project_type = st.selectbox(
+        "Project type",
+        options=["classic_html", "react"],
+        format_func=lambda v: "Classic HTML/CSS/JS" if v == "classic_html" else "React (Vite)",
+        index=0 if st.session_state.project_type == "classic_html" else 1,
+    )
     prompt = st.text_area(
         "Website prompt",
         height=170,
@@ -177,7 +185,7 @@ with st.sidebar:
         if not prompt.strip():
             st.warning("Prompt is required.")
         else:
-            payload = {"prompt": prompt.strip()}
+            payload = {"prompt": prompt.strip(), "project_type": st.session_state.project_type}
             if project_name.strip():
                 payload["project_name"] = project_name.strip()
             if use_custom_port:
@@ -188,6 +196,7 @@ with st.sidebar:
 
             if 200 <= status < 300:
                 st.session_state.last_build = result
+                st.session_state.project_type = result.get("project_type", st.session_state.project_type)
                 st.session_state.active_site_url = result.get("site_url", "")
                 st.session_state.preview_token += 1
                 st.session_state.chat_history = [
@@ -205,10 +214,11 @@ with st.sidebar:
 
 build = st.session_state.last_build
 if build:
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Project", build.get("plan", {}).get("name", "generated-site"))
     c2.metric("Port", str(build.get("host_port", "-")))
     c3.metric("Container", build.get("container_name", "-"))
+    c4.metric("Type", build.get("project_type", st.session_state.project_type))
 
 
 chat_tab, preview_tab, code_tab, manage_tab = st.tabs(["Chatbot", "Preview", "Code", "Manage"])
@@ -246,6 +256,7 @@ with chat_tab:
                         "project_dir": build.get("project_dir"),
                         "project_name": build.get("plan", {}).get("name"),
                         "container_name": build.get("container_name"),
+                        "project_type": build.get("project_type", st.session_state.project_type),
                     },
                     timeout=timeout_sec,
                 )
@@ -263,10 +274,14 @@ with chat_tab:
                             "host_port": result.get("host_port", build.get("host_port")),
                             "image_tag": result.get("image_tag", build.get("image_tag")),
                             "generated_files": result.get("generated_files", build.get("generated_files", {})),
+                            "project_type": result.get("project_type", build.get("project_type")),
                         }
                     )
                     st.session_state.active_site_url = st.session_state.last_build.get("site_url", current_url)
                     st.session_state.preview_token += 1
+                    st.session_state.project_type = st.session_state.last_build.get(
+                        "project_type", st.session_state.project_type
+                    )
 
                 final_msg = answer if not summary else f"{answer}\n\nChange summary: {summary}"
                 st.session_state.chat_history.append({"role": "assistant", "text": final_msg})
@@ -307,10 +322,33 @@ with code_tab:
     if not generated_files:
         st.info("No code available yet. Generate a website or apply chat changes first.")
     else:
-        names = ["index.html", "styles.css", "script.js"]
+        preferred_order = [
+            "index.html",
+            "package.json",
+            "vite.config.js",
+            "src/main.jsx",
+            "src/App.jsx",
+            "src/styles.css",
+            "styles.css",
+            "script.js",
+        ]
+        names = [name for name in preferred_order if name in generated_files] + [
+            name for name in generated_files if name not in preferred_order
+        ]
         tabs = st.tabs(names)
         for idx, name in enumerate(names):
-            lang = "html" if name.endswith(".html") else "css" if name.endswith(".css") else "javascript"
+            if name.endswith(".html"):
+                lang = "html"
+            elif name.endswith(".css"):
+                lang = "css"
+            elif name.endswith(".json"):
+                lang = "json"
+            elif name.endswith(".jsx"):
+                lang = "javascript"
+            elif name.endswith(".js"):
+                lang = "javascript"
+            else:
+                lang = "text"
             with tabs[idx]:
                 st.code(generated_files.get(name, ""), language=lang, line_numbers=True)
 

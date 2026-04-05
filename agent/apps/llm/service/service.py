@@ -16,16 +16,24 @@ class WebsiteAgentService:
         self.chat = ChatService()
         self.docker = DockerService(Path(settings.BASE_DIR) / "generated_sites")
 
-    def create_and_run_website(self, prompt: str, project_name: str | None = None, port: int | None = None) -> dict:
-        plan = self.llm.create_website_plan(prompt)
-        files = self.llm.generate_website_files(prompt, plan)
+    def create_and_run_website(
+        self,
+        prompt: str,
+        project_name: str | None = None,
+        port: int | None = None,
+        project_type: str = "classic_html",
+    ) -> dict:
+        normalized_type = self.llm.normalize_project_type(project_type)
+        plan = self.llm.create_website_plan(prompt, normalized_type)
+        files = self.llm.generate_website_files(prompt, plan, normalized_type)
 
         name = project_name or plan.get("name") or "generated-site"
-        project_dir = self.docker.prepare_project(name, files)
+        project_dir = self.docker.prepare_project(name, files, project_type=normalized_type)
         container = self.docker.build_and_run(project_dir, name, host_port=port)
 
         return {
             "plan": plan,
+            "project_type": normalized_type,
             "project_dir": str(project_dir),
             "files": list(files.keys()),
             "generated_files": files,
@@ -47,6 +55,7 @@ class WebsiteAgentService:
         project_dir: str | None = None,
         project_name: str | None = None,
         container_name: str | None = None,
+        project_type: str | None = None,
     ) -> dict:
         snapshot = self.chat.fetch_site_snapshot(site_url)
         answer = self.llm.chat_about_site(snapshot, message)
@@ -59,9 +68,11 @@ class WebsiteAgentService:
         if not project_dir:
             raise ValueError("project_dir is required when apply_changes=true.")
 
+        meta = self.docker.get_project_meta(Path(project_dir))
+        normalized_type = self.llm.normalize_project_type(project_type or meta.get("project_type"))
         existing_files = self.docker.read_project_files(Path(project_dir))
-        updated_files = self.llm.apply_website_changes(existing_files, message)
-        self.docker.write_project_files(Path(project_dir), updated_files)
+        updated_files = self.llm.apply_website_changes(existing_files, message, normalized_type)
+        self.docker.write_project_files(Path(project_dir), updated_files, project_type=normalized_type)
 
         selected_port = self._port_from_site_url(site_url)
         project_label = project_name or Path(project_dir).name
@@ -75,12 +86,9 @@ class WebsiteAgentService:
         result.update(
             {
                 "changes_applied": True,
+                "project_type": normalized_type,
                 "change_summary": updated_files.get("summary", ""),
-                "generated_files": {
-                    "index.html": updated_files["index.html"],
-                    "styles.css": updated_files["styles.css"],
-                    "script.js": updated_files["script.js"],
-                },
+                "generated_files": {k: v for k, v in updated_files.items() if k != "summary"},
                 **container,
             }
         )
