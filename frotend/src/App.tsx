@@ -1,120 +1,201 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useMemo, useState } from 'react'
+import { buildWebsite, chatWebsite, stopWebsite } from './api/website'
+import { BuildForm } from './components/BuildForm'
+import { ChatPanel } from './components/ChatPanel'
+import { PreviewPane } from './components/PreviewPane'
+import { ProjectFiles } from './components/ProjectFiles'
+import type { BuildWebsiteResponse, ChatWebsiteResponse, ProjectType } from './types/website'
 import './App.css'
 
+type Message = {
+  role: 'user' | 'assistant'
+  content: string
+}
+
 function App() {
-  const [count, setCount] = useState(0)
+  const [prompt, setPrompt] = useState('')
+  const [projectName, setProjectName] = useState('')
+  const [projectType, setProjectType] = useState<ProjectType>('react')
+  const [applyChanges, setApplyChanges] = useState(false)
+  const [messageInput, setMessageInput] = useState('')
+  const [messages, setMessages] = useState<Message[]>([])
+  const [buildResult, setBuildResult] = useState<BuildWebsiteResponse | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [status, setStatus] = useState('Ready')
+
+  const siteUrl = buildResult?.site_url
+  const files = buildResult?.files ?? []
+
+  const metadata = useMemo(() => {
+    if (!buildResult) {
+      return []
+    }
+    return [
+      ['Type', buildResult.project_type],
+      ['Port', String(buildResult.host_port)],
+      ['Container', buildResult.container_name],
+      ['Project Dir', buildResult.project_dir],
+    ]
+  }, [buildResult])
+
+  async function handleBuild() {
+    if (!prompt.trim()) {
+      return
+    }
+
+    setLoading(true)
+    setStatus('Generating website...')
+    try {
+      const result = await buildWebsite({
+        prompt: prompt.trim(),
+        project_name: projectName.trim() || undefined,
+        project_type: projectType,
+      })
+      setBuildResult(result)
+      setMessages([])
+      setStatus(`Website generated at ${result.site_url}`)
+    } catch (error) {
+      setStatus((error as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleSend() {
+    if (!buildResult || !messageInput.trim()) {
+      return
+    }
+
+    const currentMessage = messageInput.trim()
+    setLoading(true)
+    setMessageInput('')
+    setMessages((prev) => [...prev, { role: 'user', content: currentMessage }])
+    setStatus(applyChanges ? 'Applying requested changes...' : 'Getting assistant answer...')
+
+    try {
+      const response = await chatWebsite({
+        site_url: buildResult.site_url,
+        message: currentMessage,
+        apply_changes: applyChanges,
+        project_dir: buildResult.project_dir,
+        project_name: buildResult.plan?.name ?? (projectName.trim() || undefined),
+        container_name: buildResult.container_name,
+        project_type: buildResult.project_type,
+      })
+
+      applyChatResponse(response)
+    } catch (error) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: (error as Error).message }])
+      setStatus((error as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function applyChatResponse(response: ChatWebsiteResponse) {
+    setMessages((prev) => [...prev, { role: 'assistant', content: response.answer }])
+
+    if (!buildResult) {
+      return
+    }
+
+    const nextBuild: BuildWebsiteResponse = {
+      ...buildResult,
+      container_id: response.container_id ?? buildResult.container_id,
+      container_name: response.container_name ?? buildResult.container_name,
+      host_port: response.host_port ?? buildResult.host_port,
+      image_tag: response.image_tag ?? buildResult.image_tag,
+      site_url: response.site_url ?? buildResult.site_url,
+      project_type: response.project_type ?? buildResult.project_type,
+      files: response.generated_files ? Object.keys(response.generated_files) : buildResult.files,
+      generated_files: response.generated_files ?? buildResult.generated_files,
+    }
+
+    setBuildResult(nextBuild)
+    if (response.changes_applied) {
+      setStatus(response.change_summary ?? 'Changes applied and preview refreshed.')
+      return
+    }
+    setStatus('Assistant response ready.')
+  }
+
+  async function handleStop() {
+    if (!buildResult) {
+      return
+    }
+    setLoading(true)
+    setStatus('Stopping container...')
+    try {
+      await stopWebsite({
+        container_name: buildResult.container_name,
+      })
+      setStatus('Container stopped.')
+    } catch (error) {
+      setStatus((error as Error).message)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <main className="app-shell">
+      <header className="topbar">
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
+          <p className="topbar-eyebrow">Structured Frontend</p>
+          <h1>v0 Clone Workspace</h1>
         </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
+        <div className="status-line">{status}</div>
+      </header>
+
+      <section className="workspace">
+        <aside className="left-column">
+          <BuildForm
+            prompt={prompt}
+            projectName={projectName}
+            projectType={projectType}
+            loading={loading}
+            canStop={Boolean(buildResult)}
+            onPromptChange={setPrompt}
+            onProjectNameChange={setProjectName}
+            onProjectTypeChange={setProjectType}
+            onBuild={handleBuild}
+            onStop={handleStop}
+          />
+
+          {metadata.length > 0 ? (
+            <section className="panel">
+              <div className="panel-head">
+                <h2>Session Details</h2>
+              </div>
+              <ul className="meta-list">
+                {metadata.map(([label, value]) => (
+                  <li key={label}>
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {files.length > 0 ? <ProjectFiles files={files} /> : null}
+        </aside>
+
+        <section className="right-column">
+          <PreviewPane siteUrl={siteUrl} />
+          <ChatPanel
+            messages={messages}
+            messageInput={messageInput}
+            applyChanges={applyChanges}
+            loading={loading}
+            canSend={Boolean(buildResult && messageInput.trim())}
+            onMessageInputChange={setMessageInput}
+            onApplyChangesChange={setApplyChanges}
+            onSend={handleSend}
+          />
+        </section>
       </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+    </main>
   )
 }
 
