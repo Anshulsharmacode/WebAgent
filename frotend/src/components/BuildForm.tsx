@@ -6,81 +6,85 @@ type BuildFormProps = {
   projectType: ProjectType
   loading: boolean
   canStop: boolean
-  onPromptChange: (value: string) => void
-  onProjectNameChange: (value: string) => void
-  onProjectTypeChange: (value: ProjectType) => void
+  onPromptChange: (val: string) => void
+  onProjectNameChange: (val: string) => void
+  onProjectTypeChange: (val: ProjectType) => void
   onBuild: () => void
   onStop: () => void
 }
 
-export function BuildForm(props: BuildFormProps) {
-  const {
-    prompt,
-    projectName,
-    projectType,
-    loading,
-    canStop,
-    onPromptChange,
-    onProjectNameChange,
-    onProjectTypeChange,
-    onBuild,
-    onStop,
-  } = props
-
+export function BuildForm({
+  prompt,
+  projectName,
+  projectType,
+  loading,
+  canStop,
+  onPromptChange,
+  onProjectNameChange,
+  onProjectTypeChange,
+  onBuild,
+  onStop,
+}: BuildFormProps) {
   return (
     <section className="panel">
-      <div className="panel-head">
-        <h2>Build Prompt</h2>
-        <span className="pill">v0 clone flow</span>
+      <div className="field-group">
+        <label className="field-label" htmlFor="prompt">Prompt</label>
+        <textarea
+          id="prompt"
+          className="field-input field-textarea"
+          placeholder="Describe the website you want to build..."
+          value={prompt}
+          onChange={(e) => onPromptChange(e.target.value)}
+        />
       </div>
 
-      <label className="field-label" htmlFor="prompt">
-        Prompt
-      </label>
-      <textarea
-        id="prompt"
-        className="field-input field-textarea"
-        value={prompt}
-        onChange={(event) => onPromptChange(event.target.value)}
-        placeholder="Create a modern AI healthcare landing page with pricing, testimonials, and FAQ."
-      />
-
       <div className="field-row">
-        <div>
-          <label className="field-label" htmlFor="projectName">
-            Project Name
-          </label>
+        <div className="field-group">
+          <label className="field-label" htmlFor="name">Project Name</label>
           <input
-            id="projectName"
+            id="name"
+            type="text"
             className="field-input"
+            placeholder="my-cool-site"
             value={projectName}
-            onChange={(event) => onProjectNameChange(event.target.value)}
-            placeholder="ai-healthcare"
+            onChange={(e) => onProjectNameChange(e.target.value)}
           />
         </div>
-        <div>
-          <label className="field-label" htmlFor="projectType">
-            Project Type
-          </label>
+        <div className="field-group">
+          <label className="field-label" htmlFor="type">Type</label>
           <select
-            id="projectType"
+            id="type"
             className="field-input"
             value={projectType}
-            onChange={(event) => onProjectTypeChange(event.target.value as ProjectType)}
+            onChange={(e) => onProjectTypeChange(e.target.value as ProjectType)}
           >
             <option value="classic_html">Classic HTML</option>
-            <option value="react">React</option>
+            <option value="react">React (Vite)</option>
           </select>
         </div>
       </div>
 
-      <div className="button-row">
-        <button className="btn btn-primary" onClick={onBuild} disabled={loading || !prompt.trim()}>
+      <div className="button-row" style={{ marginTop: '0.5rem' }}>
+        <button
+          className="btn btn-primary"
+          style={{ flex: 1 }}
+          disabled={loading || !prompt.trim()}
+          onClick={onBuild}
+        >
           {loading ? 'Generating...' : 'Generate Website'}
         </button>
-        <button className="btn btn-ghost" onClick={onStop} disabled={loading || !canStop}>
-          Stop Container
-        </button>
+        {canStop && (
+          <button
+            className="btn btn-destructive"
+            disabled={loading}
+            onClick={onStop}
+            title="Stop & Remove Container"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+            </svg>
+          </button>
+        )}
       </div>
     </section>
   )
