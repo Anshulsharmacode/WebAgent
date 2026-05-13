@@ -1,8 +1,9 @@
 import json
+import os
 
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_POST, require_GET
 
 from .service.service import WebsiteAgentService
 
@@ -81,5 +82,23 @@ def stop_website(request):
         service = WebsiteAgentService()
         result = service.stop_website(container_id_or_name=container)
         return JsonResponse(result, status=200)
+    except Exception as exc:
+        return JsonResponse({"error": str(exc)}, status=500)
+
+
+@require_GET
+def download_project(request):
+    project_dir = request.GET.get("project_dir")
+    if not project_dir:
+        return JsonResponse({"error": "'project_dir' is required."}, status=400)
+
+    try:
+        service = WebsiteAgentService()
+        zip_path = service.zip_project(project_dir)
+        
+        # Open the file and return it as a response
+        # FileResponse will automatically close the file
+        response = FileResponse(open(zip_path, 'rb'), as_attachment=True, filename=os.path.basename(zip_path))
+        return response
     except Exception as exc:
         return JsonResponse({"error": str(exc)}, status=500)

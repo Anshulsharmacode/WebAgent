@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ?? 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ?? ''
 
 export async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse> {
   const response = await fetch(`${API_BASE}${path}`, {

@@ -24,6 +24,7 @@ function App() {
   const [status, setStatus] = useState('Ready')
 
   const siteUrl = buildResult?.site_url
+  const projectDir = buildResult?.project_dir
   const files = buildResult?.files ?? []
 
   const metadata = useMemo(() => {
@@ -34,7 +35,6 @@ function App() {
       ['Type', buildResult.project_type],
       ['Port', String(buildResult.host_port)],
       ['Container', buildResult.container_name],
-      ['Project Dir', buildResult.project_dir],
     ]
   }, [buildResult])
 
@@ -53,7 +53,7 @@ function App() {
       })
       setBuildResult(result)
       setMessages([])
-      setStatus(`Website generated at ${result.site_url}`)
+      setStatus(`Website generated successfully.`)
     } catch (error) {
       setStatus((error as Error).message)
     } finally {
@@ -70,7 +70,7 @@ function App() {
     setLoading(true)
     setMessageInput('')
     setMessages((prev) => [...prev, { role: 'user', content: currentMessage }])
-    setStatus(applyChanges ? 'Applying requested changes...' : 'Getting assistant answer...')
+    setStatus(applyChanges ? 'Applying changes...' : 'Thinking...')
 
     try {
       const response = await chatWebsite({
@@ -113,10 +113,10 @@ function App() {
 
     setBuildResult(nextBuild)
     if (response.changes_applied) {
-      setStatus(response.change_summary ?? 'Changes applied and preview refreshed.')
+      setStatus(response.change_summary || 'Changes applied.')
       return
     }
-    setStatus('Assistant response ready.')
+    setStatus('Ready')
   }
 
   async function handleStop() {
@@ -124,12 +124,13 @@ function App() {
       return
     }
     setLoading(true)
-    setStatus('Stopping container...')
+    setStatus('Stopping...')
     try {
       await stopWebsite({
         container_name: buildResult.container_name,
       })
-      setStatus('Container stopped.')
+      setStatus('Stopped.')
+      setBuildResult(null)
     } catch (error) {
       setStatus((error as Error).message)
     } finally {
@@ -140,11 +141,14 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="topbar-eyebrow">Structured Frontend</p>
-          <h1>v0 Clone Workspace</h1>
+        <div className="topbar-brand">
+          <p className="topbar-eyebrow">v0 Clone</p>
+          <h1>Site Generator</h1>
         </div>
-        <div className="status-line">{status}</div>
+        <div className="status-line">
+          <span className="status-indicator" style={{ background: loading ? '#f59e0b' : '#22c55e' }}></span>
+          {status}
+        </div>
       </header>
 
       <section className="workspace">
@@ -162,27 +166,36 @@ function App() {
             onStop={handleStop}
           />
 
-          {metadata.length > 0 ? (
-            <section className="panel">
+          {metadata.length > 0 && (
+            <div className="panel">
               <div className="panel-head">
                 <h2>Session Details</h2>
               </div>
-              <ul className="meta-list">
+              <div className="meta-list">
                 {metadata.map(([label, value]) => (
-                  <li key={label}>
+                  <div key={label} className="meta-item">
                     <span>{label}</span>
                     <strong>{value}</strong>
-                  </li>
+                  </div>
                 ))}
-              </ul>
-            </section>
-          ) : null}
+              </div>
+            </div>
+          )}
 
-          {files.length > 0 ? <ProjectFiles files={files} /> : null}
+          {files.length > 0 && (
+            <div className="panel" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div className="panel-head">
+                <h2>Generated Files</h2>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                <ProjectFiles files={files} />
+              </div>
+            </div>
+          )}
         </aside>
 
         <section className="right-column">
-          <PreviewPane siteUrl={siteUrl} />
+          <PreviewPane siteUrl={siteUrl} projectDir={projectDir} />
           <ChatPanel
             messages={messages}
             messageInput={messageInput}

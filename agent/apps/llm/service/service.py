@@ -1,3 +1,5 @@
+import shutil
+import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -97,3 +99,15 @@ class WebsiteAgentService:
     def stop_website(self, container_id_or_name: str) -> dict:
         self.docker.stop_and_remove(container_id_or_name)
         return {"status": "stopped"}
+
+    def zip_project(self, project_dir: str) -> str:
+        """Create a zip archive of the project directory."""
+        path = Path(project_dir)
+        if not path.exists():
+            raise FileNotFoundError(f"Project directory {project_dir} not found.")
+
+        # Create a temporary file for the zip archive
+        temp_dir = Path(tempfile.gettempdir())
+        zip_base = temp_dir / f"project-{path.name}"
+        zip_path = shutil.make_archive(str(zip_base), "zip", path)
+        return zip_path
