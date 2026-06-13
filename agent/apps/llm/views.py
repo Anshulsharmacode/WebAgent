@@ -1,30 +1,22 @@
-import json
 import os
 
-from django.http import JsonResponse, FileResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST, require_GET
+from django.http import FileResponse
+from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from .service.service import WebsiteAgentService
 
 
-def _parse_json(request):
-    try:
-        return json.loads(request.body.decode("utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return None
-
-
-@csrf_exempt
-@require_POST
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def build_website(request):
-    payload = _parse_json(request)
-    if payload is None:
-        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+    payload = request.data
 
     prompt = payload.get("prompt")
     if not prompt:
-        return JsonResponse({"error": "'prompt' is required."}, status=400)
+        return Response({"error": "'prompt' is required."}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         service = WebsiteAgentService()
@@ -36,23 +28,24 @@ def build_website(request):
         )
         print("Build result:", result)
         print("Site URL:", result.get("site_url"))
-        return JsonResponse(result, status=201)
+        return Response(result, status=status.HTTP_201_CREATED)
     except Exception as exc:
         print("Build error:", str(exc))
-        return JsonResponse({"error": str(exc)}, status=500)
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@csrf_exempt
-@require_POST
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def chat_website(request):
-    payload = _parse_json(request)
-    if payload is None:
-        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+    payload = request.data
 
     site_url = payload.get("site_url")
     message = payload.get("message")
     if not site_url or not message:
-        return JsonResponse({"error": "'site_url' and 'message' are required."}, status=400)
+        return Response(
+            {"error": "'site_url' and 'message' are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         service = WebsiteAgentService()
@@ -65,43 +58,41 @@ def chat_website(request):
             container_name=payload.get("container_name"),
             project_type=payload.get("project_type"),
         )
-        return JsonResponse(result, status=200)
+        return Response(result, status=status.HTTP_200_OK)
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@csrf_exempt
-@require_POST
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def stop_website(request):
-    payload = _parse_json(request)
-    if payload is None:
-        return JsonResponse({"error": "Invalid JSON body."}, status=400)
+    payload = request.data
 
     container = payload.get("container_id") or payload.get("container_name")
     if not container:
-        return JsonResponse({"error": "'container_id' or 'container_name' is required."}, status=400)
+        return Response(
+            {"error": "'container_id' or 'container_name' is required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         service = WebsiteAgentService()
         result = service.stop_website(container_id_or_name=container)
-        return JsonResponse(result, status=200)
+        return Response(result, status=status.HTTP_200_OK)
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@require_GET
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def download_project(request):
     project_dir = request.GET.get("project_dir")
     if not project_dir:
-        return JsonResponse({"error": "'project_dir' is required."}, status=400)
+        return Response({"error": "'project_dir' is required."}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
         service = WebsiteAgentService()
         zip_path = service.zip_project(project_dir)
-        
-        # Open the file and return it as a response
-        # FileResponse will automatically close the file
-        response = FileResponse(open(zip_path, 'rb'), as_attachment=True, filename=os.path.basename(zip_path))
-        return response
+        return FileResponse(open(zip_path, 'rb'), as_attachment=True, filename=os.path.basename(zip_path))
     except Exception as exc:
-        return JsonResponse({"error": str(exc)}, status=500)
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

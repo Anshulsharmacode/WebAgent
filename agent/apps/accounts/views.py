@@ -1,22 +1,32 @@
-from django.shortcuts import render
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+
 from .serializers import RegisterSerializer
 from .service import UserService
-from rest_framework.views import APIView
 
 
-# Create your views here.
 class RegisterView(APIView):
-    
+    permission_classes = [AllowAny]
+
     def post(self, request):
-        
-        serializers= RegisterSerializer(data=request.data)
-        
-        serializers.is_valid(raise_exception=True)
-        
+        serializer = RegisterSerializer(data=request.data)
+
+        serializer.is_valid(raise_exception=True)
+
         user = UserService.create_user(
-            serializers.validated_data
+            serializer.validated_data
         )
-        
-        return({
-        "message": "User created"
-        })
+
+        return Response(
+            {
+                "message": "User created",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                },
+            },
+            status=status.HTTP_201_CREATED,
+        )
