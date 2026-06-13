@@ -1,4 +1,4 @@
-import { postJson } from './http'
+import { downloadFile, postJson } from './http'
 import type {
   BuildWebsitePayload,
   BuildWebsiteResponse,
@@ -17,4 +17,11 @@ export function chatWebsite(payload: ChatWebsitePayload): Promise<ChatWebsiteRes
 
 export function stopWebsite(payload: StopWebsitePayload): Promise<{ status: string }> {
   return postJson<{ status: string }>('/llm/stop/', payload)
+}
+
+export function downloadProject(projectDir: string): Promise<void> {
+  return downloadFile(
+    `/llm/download/?project_dir=${encodeURIComponent(projectDir)}`,
+    'project.zip',
+  )
 }

@@ -1,4 +1,5 @@
 import { useMemo, useRef, useEffect } from "react";
+import { downloadProject } from "../api/website";
 
 type PreviewPaneProps = {
   siteUrl?: string;
@@ -7,12 +8,6 @@ type PreviewPaneProps = {
 
 export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-
-  const downloadUrl = useMemo(() => {
-    if (!projectDir) return null;
-    const apiBase = import.meta.env.VITE_API_BASE?.replace(/\/$/, "") ?? "";
-    return `${apiBase}/llm/download/?project_dir=${encodeURIComponent(projectDir)}`;
-  }, [projectDir]);
 
   // Fix localhost URL if needed
   const fixedSiteUrl = useMemo(() => {
@@ -86,6 +81,13 @@ export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
     }
   };
 
+  const handleDownload = () => {
+    if (!projectDir) return;
+    downloadProject(projectDir).catch((error) => {
+      console.error("Failed to download project:", error);
+    });
+  };
+
   return (
     <section className="preview-container">
       <div className="preview-header">
@@ -100,18 +102,20 @@ export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
           Live Preview
         </h2>
         <div className="button-row">
-          {downloadUrl && (
-            <a
-              href={downloadUrl}
+          {projectDir && (
+            <button
+              onClick={handleDownload}
               className="btn btn-ghost"
               style={{
                 fontSize: "0.75rem",
                 height: "28px",
                 padding: "0 0.75rem",
+                cursor: "pointer",
+                border: "1px solid var(--border)",
               }}
             >
               Download ZIP
-            </a>
+            </button>
           )}
           {fixedSiteUrl && (
             <>
