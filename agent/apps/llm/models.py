@@ -1,9 +1,9 @@
-from django.contrib.auth.models import User
+from django.conf import settings
 from django.db import models
 
 
 class Project(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     prompt = models.TextField()
     container_id = models.CharField(max_length=128, blank=True)
     site_url = models.URLField(blank=True)

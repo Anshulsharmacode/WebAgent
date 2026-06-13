@@ -34,8 +34,11 @@ def build_website(request):
             port=payload.get("port"),
             project_type=payload.get("project_type", "classic_html"),
         )
+        print("Build result:", result)
+        print("Site URL:", result.get("site_url"))
         return JsonResponse(result, status=201)
     except Exception as exc:
+        print("Build error:", str(exc))
         return JsonResponse({"error": str(exc)}, status=500)
 
 

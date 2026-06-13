@@ -1,4 +1,4 @@
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useEffect } from "react";
 
 type PreviewPaneProps = {
   siteUrl?: string;
@@ -16,20 +16,72 @@ export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
 
   // Fix localhost URL if needed
   const fixedSiteUrl = useMemo(() => {
-    if (!siteUrl) return undefined;
-    let url = siteUrl;
-    if (url.includes("localhost")) {
-      const hostname = window.location.hostname;
-      url = url.replace("localhost", hostname);
+    if (!siteUrl) {
+      console.log("PreviewPane: No siteUrl provided");
+      return undefined;
     }
+    console.log("PreviewPane: Original siteUrl:", siteUrl);
+
+    let url = siteUrl;
+
+    // If localhost, we need to check if we're accessing from localhost too
+    if (url.includes("localhost")) {
+      // If the current page is also on localhost, keep localhost
+      if (
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1"
+      ) {
+        console.log(
+          "PreviewPane: Current page is on localhost, keeping localhost",
+        );
+      } else {
+        // If current page is on a different hostname, replace localhost with that hostname
+        const hostname = window.location.hostname;
+        url = url.replace("localhost", hostname);
+        console.log(
+          "PreviewPane: Replaced localhost with",
+          hostname,
+          "->",
+          url,
+        );
+      }
+    }
+
+    // Ensure protocol
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = `http://${url}`;
     }
+
+    console.log("PreviewPane: Final URL:", url);
     return url;
   }, [siteUrl]);
 
+  // Update iframe when URL changes
+  useEffect(() => {
+    if (iframeRef.current && fixedSiteUrl) {
+      console.log("PreviewPane: Setting iframe src to", fixedSiteUrl);
+
+      // Test if the URL is accessible before setting it
+      fetch(fixedSiteUrl, { method: "HEAD", mode: "no-cors" })
+        .then(() => {
+          console.log("PreviewPane: URL is accessible");
+          if (iframeRef.current) {
+            iframeRef.current.src = fixedSiteUrl;
+          }
+        })
+        .catch((error) => {
+          console.error("PreviewPane: URL is not accessible", error);
+          // Try anyway, maybe it's a CORS issue
+          if (iframeRef.current) {
+            iframeRef.current.src = fixedSiteUrl;
+          }
+        });
+    }
+  }, [fixedSiteUrl]);
+
   const handleRefresh = () => {
     if (iframeRef.current && fixedSiteUrl) {
+      console.log("PreviewPane: Refreshing iframe");
       iframeRef.current.src = fixedSiteUrl;
     }
   };
@@ -114,11 +166,17 @@ export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
             className="preview-frame"
             src={fixedSiteUrl}
             title="Generated website preview"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-top-navigation"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-top-navigation allow-popups-to-escape-sandbox allow-modals"
             style={{ width: "100%", height: "100%", border: "none" }}
             onError={() =>
               console.error("Failed to load preview:", fixedSiteUrl)
             }
+            onLoad={() => {
+              console.log(
+                "PreviewPane: Iframe loaded successfully from",
+                fixedSiteUrl,
+              );
+            }}
           />
         ) : (
           <div className="empty-state">

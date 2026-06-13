@@ -1,76 +1,87 @@
-import { useMemo, useState } from 'react'
-import { buildWebsite, chatWebsite, stopWebsite } from './api/website'
-import { BuildForm } from './components/BuildForm'
-import { ChatPanel } from './components/ChatPanel'
-import { PreviewPane } from './components/PreviewPane'
-import { ProjectFiles } from './components/ProjectFiles'
-import type { BuildWebsiteResponse, ChatWebsiteResponse, ProjectType } from './types/website'
-import './App.css'
+import { useMemo, useState } from "react";
+import { buildWebsite, chatWebsite, stopWebsite } from "./api/website";
+import { BuildForm } from "./components/BuildForm";
+import { ChatPanel } from "./components/ChatPanel";
+import { PreviewPane } from "./components/PreviewPane";
+import { ProjectFiles } from "./components/ProjectFiles";
+import type {
+  BuildWebsiteResponse,
+  ChatWebsiteResponse,
+  ProjectType,
+} from "./types/website";
+import "./App.css";
 
 type Message = {
-  role: 'user' | 'assistant'
-  content: string
-}
+  role: "user" | "assistant";
+  content: string;
+};
 
 function App() {
-  const [prompt, setPrompt] = useState('')
-  const [projectName, setProjectName] = useState('')
-  const [projectType, setProjectType] = useState<ProjectType>('react')
-  const [applyChanges, setApplyChanges] = useState(false)
-  const [messageInput, setMessageInput] = useState('')
-  const [messages, setMessages] = useState<Message[]>([])
-  const [buildResult, setBuildResult] = useState<BuildWebsiteResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState('Ready')
+  const [prompt, setPrompt] = useState("");
+  const [projectName, setProjectName] = useState("");
+  const [projectType, setProjectType] = useState<ProjectType>("react");
+  const [applyChanges, setApplyChanges] = useState(false);
+  const [messageInput, setMessageInput] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [buildResult, setBuildResult] = useState<BuildWebsiteResponse | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("Ready");
 
-  const siteUrl = buildResult?.site_url
-  const projectDir = buildResult?.project_dir
-  const files = buildResult?.files ?? []
+  const siteUrl = buildResult?.site_url;
+  const projectDir = buildResult?.project_dir;
+  const files = buildResult?.files ?? [];
 
   const metadata = useMemo(() => {
     if (!buildResult) {
-      return []
+      return [];
     }
     return [
-      ['Type', buildResult.project_type],
-      ['Port', String(buildResult.host_port)],
-      ['Container', buildResult.container_name],
-    ]
-  }, [buildResult])
+      ["Type", buildResult.project_type],
+      ["Port", String(buildResult.host_port)],
+      ["Container", buildResult.container_name],
+    ];
+  }, [buildResult]);
 
   async function handleBuild() {
     if (!prompt.trim()) {
-      return
+      return;
     }
 
-    setLoading(true)
-    setStatus('Generating website...')
+    setLoading(true);
+    setStatus("Generating website...");
     try {
       const result = await buildWebsite({
         prompt: prompt.trim(),
         project_name: projectName.trim() || undefined,
         project_type: projectType,
-      })
-      setBuildResult(result)
-      setMessages([])
-      setStatus(`Website generated successfully.`)
+      });
+      console.log("Build result:", result);
+      console.log("Site URL:", result.site_url);
+      console.log("Project Dir:", result.project_dir);
+      setBuildResult(result);
+      setMessages([]);
+      setStatus(`Website generated successfully.`);
     } catch (error) {
-      setStatus((error as Error).message)
+      const errorMessage = (error as Error).message;
+      console.error("Build error:", errorMessage);
+      setStatus(errorMessage);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   async function handleSend() {
     if (!buildResult || !messageInput.trim()) {
-      return
+      return;
     }
 
-    const currentMessage = messageInput.trim()
-    setLoading(true)
-    setMessageInput('')
-    setMessages((prev) => [...prev, { role: 'user', content: currentMessage }])
-    setStatus(applyChanges ? 'Applying changes...' : 'Thinking...')
+    const currentMessage = messageInput.trim();
+    setLoading(true);
+    setMessageInput("");
+    setMessages((prev) => [...prev, { role: "user", content: currentMessage }]);
+    setStatus(applyChanges ? "Applying changes..." : "Thinking...");
 
     try {
       const response = await chatWebsite({
@@ -78,25 +89,32 @@ function App() {
         message: currentMessage,
         apply_changes: applyChanges,
         project_dir: buildResult.project_dir,
-        project_name: buildResult.plan?.name ?? (projectName.trim() || undefined),
+        project_name:
+          buildResult.plan?.name ?? (projectName.trim() || undefined),
         container_name: buildResult.container_name,
         project_type: buildResult.project_type,
-      })
+      });
 
-      applyChatResponse(response)
+      applyChatResponse(response);
     } catch (error) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: (error as Error).message }])
-      setStatus((error as Error).message)
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: (error as Error).message },
+      ]);
+      setStatus((error as Error).message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   function applyChatResponse(response: ChatWebsiteResponse) {
-    setMessages((prev) => [...prev, { role: 'assistant', content: response.answer }])
+    setMessages((prev) => [
+      ...prev,
+      { role: "assistant", content: response.answer },
+    ]);
 
     if (!buildResult) {
-      return
+      return;
     }
 
     const nextBuild: BuildWebsiteResponse = {
@@ -107,34 +125,36 @@ function App() {
       image_tag: response.image_tag ?? buildResult.image_tag,
       site_url: response.site_url ?? buildResult.site_url,
       project_type: response.project_type ?? buildResult.project_type,
-      files: response.generated_files ? Object.keys(response.generated_files) : buildResult.files,
+      files: response.generated_files
+        ? Object.keys(response.generated_files)
+        : buildResult.files,
       generated_files: response.generated_files ?? buildResult.generated_files,
-    }
+    };
 
-    setBuildResult(nextBuild)
+    setBuildResult(nextBuild);
     if (response.changes_applied) {
-      setStatus(response.change_summary || 'Changes applied.')
-      return
+      setStatus(response.change_summary || "Changes applied.");
+      return;
     }
-    setStatus('Ready')
+    setStatus("Ready");
   }
 
   async function handleStop() {
     if (!buildResult) {
-      return
+      return;
     }
-    setLoading(true)
-    setStatus('Stopping...')
+    setLoading(true);
+    setStatus("Stopping...");
     try {
       await stopWebsite({
         container_name: buildResult.container_name,
-      })
-      setStatus('Stopped.')
-      setBuildResult(null)
+      });
+      setStatus("Stopped.");
+      setBuildResult(null);
     } catch (error) {
-      setStatus((error as Error).message)
+      setStatus((error as Error).message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
@@ -146,7 +166,10 @@ function App() {
           <h1>Site Generator</h1>
         </div>
         <div className="status-line">
-          <span className="status-indicator" style={{ background: loading ? '#f59e0b' : '#22c55e' }}></span>
+          <span
+            className="status-indicator"
+            style={{ background: loading ? "#f59e0b" : "#22c55e" }}
+          ></span>
           {status}
         </div>
       </header>
@@ -183,11 +206,19 @@ function App() {
           )}
 
           {files.length > 0 && (
-            <div className="panel" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div
+              className="panel"
+              style={{
+                flex: 1,
+                overflow: "hidden",
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
               <div className="panel-head">
                 <h2>Generated Files</h2>
               </div>
-              <div style={{ flex: 1, overflowY: 'auto' }}>
+              <div style={{ flex: 1, overflowY: "auto" }}>
                 <ProjectFiles files={files} />
               </div>
             </div>
@@ -209,7 +240,7 @@ function App() {
         </section>
       </section>
     </main>
-  )
+  );
 }
 
-export default App
+export default App;
