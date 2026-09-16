@@ -9,6 +9,40 @@ from rest_framework.response import Response
 from .service.service import WebsiteAgentService
 
 
+def get_llm_config_from_request(request):
+    payload = request.data if isinstance(request.data, dict) else {}
+
+    api_key = (
+        payload.get("api_key")
+        or payload.get("apiKey")
+        or request.headers.get("X-API-Key")
+        or request.headers.get("X-Api-Key")
+        or request.headers.get("x-api-key")
+        or request.GET.get("api_key")
+        or request.GET.get("apiKey")
+    )
+
+    model_name = (
+        payload.get("model_name")
+        or payload.get("modelName")
+        or payload.get("model")
+        or request.headers.get("X-Model-Name")
+        or request.headers.get("x-model-name")
+        or request.GET.get("model_name")
+        or request.GET.get("modelName")
+        or request.GET.get("model")
+    )
+
+    user = getattr(request, "user", None)
+    if user and getattr(user, "is_authenticated", False):
+        if not api_key:
+            api_key = getattr(user, "api_key", None)
+        if not model_name:
+            model_name = getattr(user, "model_name", None)
+
+    return api_key, model_name
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def build_website(request):
@@ -18,8 +52,14 @@ def build_website(request):
     if not prompt:
         return Response({"error": "'prompt' is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+    api_key, model_name = get_llm_config_from_request(request)
+
     try:
-        service = WebsiteAgentService()
+        service = WebsiteAgentService(
+            api_key=api_key,
+            model_name=model_name,
+            user=request.user,
+        )
         result = service.create_and_run_website(
             prompt=prompt,
             project_name=payload.get("project_name"),
@@ -47,8 +87,14 @@ def chat_website(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    api_key, model_name = get_llm_config_from_request(request)
+
     try:
-        service = WebsiteAgentService()
+        service = WebsiteAgentService(
+            api_key=api_key,
+            model_name=model_name,
+            user=request.user,
+        )
         result = service.chat_with_website(
             site_url=site_url,
             message=message,

@@ -126,3 +126,33 @@ class AuthTests(APITestCase):
         self.assertEqual(get_response.data["api_key"], "my-secret-api-key")
         self.assertEqual(get_response.data["model_name"], "gemini-2.5-flash")
 
+    @patch("apps.llm.views.WebsiteAgentService")
+    def test_llm_build_uses_user_api_key_and_model_name(self, service_class):
+        user = get_user_model().objects.create_user(
+            username="ansh",
+            email="ansh@example.com",
+            password="StrongPass123!",
+            api_key="user-custom-api-key",
+            model_name="gemini-2.5-pro",
+        )
+        service_class.return_value.create_and_run_website.return_value = {
+            "site_url": "http://localhost:5174",
+            "project_dir": "/tmp/demo",
+        }
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/llm/build/",
+            {"prompt": "Build a portfolio"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        service_class.assert_called_once_with(
+            api_key="user-custom-api-key",
+            model_name="gemini-2.5-pro",
+            user=user,
+        )
+
+
+

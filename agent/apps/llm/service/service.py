@@ -13,8 +13,20 @@ from .llm import LLMService
 class WebsiteAgentService:
     """Orchestrates prompt -> code -> docker -> chat."""
 
-    def __init__(self) -> None:
-        self.llm = LLMService()
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model_name: str | None = None,
+        user=None,
+    ) -> None:
+        resolved_api_key = api_key
+        resolved_model_name = model_name
+
+        if user and getattr(user, "is_authenticated", True):
+            resolved_api_key = resolved_api_key or getattr(user, "api_key", None)
+            resolved_model_name = resolved_model_name or getattr(user, "model_name", None)
+
+        self.llm = LLMService(api_key=resolved_api_key, model_name=resolved_model_name)
         self.chat = ChatService()
         self.docker = DockerService(Path(settings.BASE_DIR) / "generated_sites")
 
