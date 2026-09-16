@@ -2,12 +2,60 @@ import json
 import os
 import re
 from textwrap import dedent
+from typing import Any, List, Optional
+
+import litellm
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 from .plan import WebsitePlan
 
 
+class ChatLiteLLM(BaseChatModel):
+    """Custom LangChain Chat Model wrapper around LiteLLM for multi-provider support."""
+
+    model_name: str = "gemini/gemini-2.5-flash"
+    api_key: Optional[str] = None
+    temperature: float = 0.3
+
+    @property
+    def _llm_type(self) -> str:
+        return "litellm"
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        formatted_messages = []
+        for m in messages:
+            role = "user"
+            if m.type in ("system", "developer"):
+                role = "system"
+            elif m.type in ("ai", "assistant"):
+                role = "assistant"
+            formatted_messages.append({"role": role, "content": m.content})
+
+        completion_kwargs: dict[str, Any] = {
+            "model": self.model_name,
+            "messages": formatted_messages,
+            "temperature": self.temperature,
+        }
+        if self.api_key:
+            completion_kwargs["api_key"] = self.api_key
+        if stop:
+            completion_kwargs["stop"] = stop
+
+        response = litellm.completion(**completion_kwargs)
+        content = response.choices[0].message.content or ""
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
+
+
 class LLMService:
-    """Handles Gemini 2.5 Flash interactions through LangChain."""
+    """Handles LLM interactions through LangChain and LiteLLM across multiple providers."""
 
     SUPPORTED_PROJECT_TYPES = {"classic_html", "react"}
     CLASSIC_FILES = ("index.html", "styles.css", "script.js")
@@ -20,28 +68,36 @@ class LLMService:
         "src/styles.css",
     )
 
-    def __init__(self) -> None:
+    def __init__(self, api_key: str | None = None, model_name: str | None = None) -> None:
         try:
             from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
             from langchain_core.prompts import ChatPromptTemplate
-            from langchain_google_genai import ChatGoogleGenerativeAI
         except ModuleNotFoundError as exc:
             raise ValueError(
-                "Missing dependencies. Install: langchain langchain-core langchain-google-genai pydantic"
+                "Missing dependencies. Install: langchain langchain-core litellm pydantic"
             ) from exc
 
-        api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        resolved_api_key = (
+            api_key
+            or os.getenv("GOOGLE_API_KEY")
+            or os.getenv("GEMINI_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or os.getenv("ANTHROPIC_API_KEY")
+        )
 
-        if not api_key:
-            raise ValueError("GOOGLE_API_KEY is not set.")
+        raw_model = model_name or "gemini-2.5-flash"
+        if raw_model.startswith("gemini-") and not raw_model.startswith("gemini/"):
+            resolved_model = f"gemini/{raw_model}"
+        else:
+            resolved_model = raw_model
 
         self.ChatPromptTemplate = ChatPromptTemplate
         self.JsonOutputParser = JsonOutputParser
         self.StrOutputParser = StrOutputParser
 
-        self.model = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            google_api_key=api_key,
+        self.model = ChatLiteLLM(
+            model_name=resolved_model,
+            api_key=resolved_api_key,
             temperature=0.3,
         )
 
