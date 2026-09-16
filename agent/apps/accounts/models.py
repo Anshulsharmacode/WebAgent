@@ -13,6 +13,12 @@ class User(AbstractUser):
         blank=True
     )
 
+    model_name = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True
+    )
+
     USERNAME_FIELD = 'email'
 
     REQUIRED_FIELDS = ['username'] #this is for login field ansh@gmail.com , will ansh user name

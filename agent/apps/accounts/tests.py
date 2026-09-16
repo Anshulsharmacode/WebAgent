@@ -90,3 +90,39 @@ class AuthTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["site_url"], "http://localhost:5174")
+
+    def test_api_key_route_requires_authentication(self):
+        response = self.client.post(
+            "/api/v1/users/api-key/",
+            {"api_key": "secret-key", "model_name": "gemini-2.5-flash"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_authenticated_user_can_update_and_get_api_key_and_model_name(self):
+        user = get_user_model().objects.create_user(
+            username="ansh",
+            email="ansh@example.com",
+            password="StrongPass123!",
+        )
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            "/api/v1/users/api-key/",
+            {"api_key": "my-secret-api-key", "model_name": "gemini-2.5-flash"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["user"]["api_key"], "my-secret-api-key")
+        self.assertEqual(response.data["user"]["model_name"], "gemini-2.5-flash")
+
+        user.refresh_from_db()
+        self.assertEqual(user.api_key, "my-secret-api-key")
+        self.assertEqual(user.model_name, "gemini-2.5-flash")
+
+        get_response = self.client.get("/api/v1/users/api-key/")
+        self.assertEqual(get_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(get_response.data["api_key"], "my-secret-api-key")
+        self.assertEqual(get_response.data["model_name"], "gemini-2.5-flash")
+

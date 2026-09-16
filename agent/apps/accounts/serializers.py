@@ -19,3 +19,13 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_password(self, value):
         validate_password(value)
         return value
+
+
+class ApiKeyModelSerializer(serializers.ModelSerializer):
+    api_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    model_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = ["api_key", "model_name"]
+

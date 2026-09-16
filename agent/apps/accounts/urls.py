@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import RegisterView
+from .views import ApiKeyModelView, RegisterView
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView
@@ -24,4 +24,11 @@ urlpatterns = [
         TokenRefreshView.as_view(),
         name='refresh',
     ),
+
+    path(
+        'api-key/',
+        ApiKeyModelView.as_view(),
+        name='api_key_model',
+    ),
 ]
+
