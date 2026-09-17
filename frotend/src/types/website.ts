@@ -4,6 +4,8 @@ export type BuildWebsitePayload = {
   prompt: string
   project_name?: string
   project_type: ProjectType
+  api_key?: string
+  model_name?: string
 }
 
 export type BuildWebsiteResponse = {
@@ -31,6 +33,8 @@ export type ChatWebsitePayload = {
   project_name?: string
   container_name?: string
   project_type?: ProjectType
+  api_key?: string
+  model_name?: string
 }
 
 export type ChatWebsiteResponse = {
@@ -50,3 +54,37 @@ export type StopWebsitePayload = {
   container_id?: string
   container_name?: string
 }
+
+export type AuthPayload = {
+  username?: string
+  email: string
+  password: string
+}
+
+export type AuthResponse = {
+  access?: string
+  refresh?: string
+  message?: string
+  user?: {
+    id: number
+    username: string
+    email: string
+  }
+}
+
+export type ApiKeyModelPayload = {
+  api_key?: string
+  model_name?: string
+}
+
+export type ApiKeyModelResponse = {
+  api_key?: string
+  model_name?: string
+  message?: string
+  user?: {
+    id: number
+    api_key?: string
+    model_name?: string
+  }
+}
+

@@ -1,6 +1,15 @@
 const API_BASE = import.meta.env.VITE_API_BASE?.replace(/\/$/, '') ?? ''
 const ACCESS_TOKEN_KEY = 'accessToken'
 
+export function setAccessToken(token: string): void {
+  localStorage.setItem(ACCESS_TOKEN_KEY, token)
+}
+
+export function removeAccessToken(): void {
+  localStorage.removeItem(ACCESS_TOKEN_KEY)
+  localStorage.removeItem('access')
+}
+
 export function getAccessToken(): string | null {
   return localStorage.getItem(ACCESS_TOKEN_KEY) ?? localStorage.getItem('access')
 }
@@ -8,6 +17,23 @@ export function getAccessToken(): string | null {
 function authHeaders(): HeadersInit {
   const token = getAccessToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export async function getJson<TResponse>(path: string): Promise<TResponse> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    headers: {
+      ...authHeaders(),
+    },
+  })
+
+  const data = (await response.json()) as TResponse & { error?: string; detail?: string }
+
+  if (!response.ok) {
+    throw new Error(data.error ?? data.detail ?? `Request failed (${response.status})`)
+  }
+
+  return data
 }
 
 export async function postJson<TResponse>(path: string, payload: unknown): Promise<TResponse> {
@@ -20,10 +46,10 @@ export async function postJson<TResponse>(path: string, payload: unknown): Promi
     body: JSON.stringify(payload),
   })
 
-  const data = (await response.json()) as TResponse & { error?: string }
+  const data = (await response.json()) as TResponse & { error?: string; detail?: string }
 
   if (!response.ok) {
-    throw new Error(data.error ?? `Request failed (${response.status})`)
+    throw new Error(data.error ?? data.detail ?? `Request failed (${response.status})`)
   }
 
   return data

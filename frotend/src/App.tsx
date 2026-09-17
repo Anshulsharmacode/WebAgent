@@ -4,6 +4,7 @@ import { BuildForm } from "./components/BuildForm";
 import { ChatPanel } from "./components/ChatPanel";
 import { PreviewPane } from "./components/PreviewPane";
 import { ProjectFiles } from "./components/ProjectFiles";
+import { SettingsModal } from "./components/SettingsModal";
 import type {
   BuildWebsiteResponse,
   ChatWebsiteResponse,
@@ -20,6 +21,10 @@ function App() {
   const [prompt, setPrompt] = useState("");
   const [projectName, setProjectName] = useState("");
   const [projectType, setProjectType] = useState<ProjectType>("react");
+  const [modelName, setModelName] = useState("gemini-2.5-flash");
+  const [apiKey, setApiKey] = useState("");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const [applyChanges, setApplyChanges] = useState(false);
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,8 +46,9 @@ function App() {
       ["Type", buildResult.project_type],
       ["Port", String(buildResult.host_port)],
       ["Container", buildResult.container_name],
+      ["Model", modelName],
     ];
-  }, [buildResult]);
+  }, [buildResult, modelName]);
 
   async function handleBuild() {
     if (!prompt.trim()) {
@@ -56,10 +62,10 @@ function App() {
         prompt: prompt.trim(),
         project_name: projectName.trim() || undefined,
         project_type: projectType,
+        model_name: modelName,
+        api_key: apiKey.trim() || undefined,
       });
       console.log("Build result:", result);
-      console.log("Site URL:", result.site_url);
-      console.log("Project Dir:", result.project_dir);
       setBuildResult(result);
       setMessages([]);
       setStatus(`Website generated successfully.`);
@@ -93,6 +99,8 @@ function App() {
           buildResult.plan?.name ?? (projectName.trim() || undefined),
         container_name: buildResult.container_name,
         project_type: buildResult.project_type,
+        model_name: modelName,
+        api_key: apiKey.trim() || undefined,
       });
 
       applyChatResponse(response);
@@ -158,19 +166,58 @@ function App() {
     }
   }
 
+  function handleSettingsSaved(savedApiKey?: string, savedModelName?: string) {
+    if (savedApiKey !== undefined) setApiKey(savedApiKey);
+    if (savedModelName) setModelName(savedModelName);
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
         <div className="topbar-brand">
-          <p className="topbar-eyebrow">v0 Clone</p>
+          <p className="topbar-eyebrow">AI WebAgent</p>
           <h1>Site Generator</h1>
         </div>
-        <div className="status-line">
-          <span
-            className="status-indicator"
-            style={{ background: loading ? "#f59e0b" : "#22c55e" }}
-          ></span>
-          {status}
+
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div className="status-line">
+            <span
+              className="status-indicator"
+              style={{ background: loading ? "#f59e0b" : "#22c55e" }}
+            ></span>
+            {status}
+          </div>
+
+          <button
+            className="btn"
+            style={{
+              background: "#27272a",
+              color: "#f4f4f5",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "0.85rem",
+              padding: "0.4rem 0.8rem",
+            }}
+            onClick={() => setIsSettingsOpen(true)}
+            title="Account & API Key Settings"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            Settings
+          </button>
         </div>
       </header>
 
@@ -180,11 +227,15 @@ function App() {
             prompt={prompt}
             projectName={projectName}
             projectType={projectType}
+            modelName={modelName}
+            apiKey={apiKey}
             loading={loading}
             canStop={Boolean(buildResult)}
             onPromptChange={setPrompt}
             onProjectNameChange={setProjectName}
             onProjectTypeChange={setProjectType}
+            onModelNameChange={setModelName}
+            onApiKeyChange={setApiKey}
             onBuild={handleBuild}
             onStop={handleStop}
           />
@@ -239,6 +290,12 @@ function App() {
           />
         </section>
       </section>
+
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onSaved={handleSettingsSaved}
+      />
     </main>
   );
 }
