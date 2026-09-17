@@ -1,7 +1,6 @@
 import json
 import os
 import re
-from textwrap import dedent
 from typing import Any, List, Optional
 
 import litellm
@@ -10,6 +9,20 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from .plan import WebsitePlan
+from .prompts import (
+    APPLY_WEBSITE_CHANGES_PROMPT,
+    CHAT_ABOUT_SITE_PROMPT,
+    CLASSIC_EDIT_OUTPUT_SHAPE,
+    CLASSIC_EDIT_RULES,
+    CLASSIC_OUTPUT_SHAPE,
+    CLASSIC_REQUIREMENTS,
+    GENERATE_WEBSITE_FILES_PROMPT,
+    REACT_EDIT_OUTPUT_SHAPE,
+    REACT_EDIT_RULES,
+    REACT_OUTPUT_SHAPE,
+    REACT_REQUIREMENTS,
+    WEBSITE_PLAN_PROMPT,
+)
 
 
 class ChatLiteLLM(BaseChatModel):
@@ -134,23 +147,7 @@ class LLMService:
     def create_website_plan(self, user_prompt: str, project_type: str = "classic_html") -> dict:
         normalized_type = self.normalize_project_type(project_type)
         parser = self.JsonOutputParser(pydantic_object=WebsitePlan)
-        prompt = self.ChatPromptTemplate.from_template(
-            dedent(
-                """
-                You are a senior web product planner.
-                Convert the user request into a strict JSON object.
-
-                User request:
-                {user_prompt}
-
-                Build target:
-                {project_type}
-
-                JSON schema rules:
-                {format_instructions}
-                """
-            ).strip()
-        )
+        prompt = self.ChatPromptTemplate.from_template(WEBSITE_PLAN_PROMPT)
 
         chain = prompt | self.model | parser
         return chain.invoke(
@@ -165,69 +162,13 @@ class LLMService:
         normalized_type = self.normalize_project_type(project_type)
 
         if normalized_type == "react":
-            output_shape = dedent(
-                """
-                {
-                  "index.html": "...",
-                  "package.json": "...",
-                  "vite.config.js": "...",
-                  "src/main.jsx": "...",
-                  "src/App.jsx": "...",
-                  "src/styles.css": "..."
-                }
-                """
-            ).strip()
-            requirements = dedent(
-                """
-                - Use React + Vite with JavaScript (JSX, not TypeScript).
-                - package.json must include scripts: "dev", "build", "preview".
-                - import "./styles.css" from App or main entry.
-                - Do not use Tailwind utility classes unless you also include full Tailwind/PostCSS config files.
-                - Keep it production-ready and responsive.
-                """
-            ).strip()
+            output_shape = REACT_OUTPUT_SHAPE
+            requirements = REACT_REQUIREMENTS
         else:
-            output_shape = dedent(
-                """
-                {
-                  "index.html": "...",
-                  "styles.css": "...",
-                  "script.js": "..."
-                }
-                """
-            ).strip()
-            requirements = dedent(
-                """
-                - Use plain HTML/CSS/JS.
-                - Link styles.css and script.js from index.html.
-                - Keep it production-ready and responsive.
-                """
-            ).strip()
+            output_shape = CLASSIC_OUTPUT_SHAPE
+            requirements = CLASSIC_REQUIREMENTS
 
-        prompt = self.ChatPromptTemplate.from_template(
-            dedent(
-                """
-                You are an expert frontend engineer.
-                Build a modern single-page website from the request and plan.
-
-                Target project type:
-                {project_type}
-
-                User prompt:
-                {user_prompt}
-
-                Plan JSON:
-                {plan_json}
-
-                Output only a valid JSON object with this exact shape:
-                {output_shape}
-
-                Requirements:
-                {requirements}
-                - No markdown fences.
-                """
-            ).strip()
-        )
+        prompt = self.ChatPromptTemplate.from_template(GENERATE_WEBSITE_FILES_PROMPT)
 
         chain = prompt | self.model | self.StrOutputParser()
         raw = chain.invoke(
@@ -251,70 +192,13 @@ class LLMService:
         required_files = self.required_files_for_type(normalized_type)
 
         if normalized_type == "react":
-            output_shape = dedent(
-                """
-                {
-                  "index.html": "...",
-                  "package.json": "...",
-                  "vite.config.js": "...",
-                  "src/main.jsx": "...",
-                  "src/App.jsx": "...",
-                  "src/styles.css": "...",
-                  "summary": "1-2 sentence summary of what changed"
-                }
-                """
-            ).strip()
-            rules = dedent(
-                """
-                - Apply requested changes while keeping the app working with React + Vite.
-                - Ensure JSX and imports are valid.
-                - If using Tailwind classes, ensure required Tailwind/PostCSS configs are present and consistent.
-                """
-            ).strip()
+            output_shape = REACT_EDIT_OUTPUT_SHAPE
+            rules = REACT_EDIT_RULES
         else:
-            output_shape = dedent(
-                """
-                {
-                  "index.html": "...",
-                  "styles.css": "...",
-                  "script.js": "...",
-                  "summary": "1-2 sentence summary of what changed"
-                }
-                """
-            ).strip()
-            rules = dedent(
-                """
-                - Apply requested changes directly to HTML/CSS/JS files.
-                - Ensure output stays valid HTML/CSS/JS.
-                """
-            ).strip()
+            output_shape = CLASSIC_EDIT_OUTPUT_SHAPE
+            rules = CLASSIC_EDIT_RULES
 
-        prompt = self.ChatPromptTemplate.from_template(
-            dedent(
-                """
-                You are a senior frontend engineer applying requested edits.
-
-                Target project type:
-                {project_type}
-
-                User requested change:
-                {user_message}
-
-                Current files:
-                {files_json}
-
-                Return only JSON with this exact shape:
-                {output_shape}
-
-                Rules:
-                - Apply the requested change directly to the files.
-                - You must make at least one concrete change when a change is requested.
-                - Keep existing structure unless the request requires larger changes.
-                {rules}
-                - No markdown fences.
-                """
-            ).strip()
-        )
+        prompt = self.ChatPromptTemplate.from_template(APPLY_WEBSITE_CHANGES_PROMPT)
 
         chain = prompt | self.model | self.StrOutputParser()
         raw = chain.invoke(
@@ -335,21 +219,7 @@ class LLMService:
         return result
 
     def chat_about_site(self, site_snapshot: str, user_message: str) -> str:
-        prompt = self.ChatPromptTemplate.from_template(
-            dedent(
-                """
-                You are a website assistant.
-                Website snapshot may include HTML/CSS/JS.
-                Give practical guidance based on this context.
-
-                Website snapshot:
-                {site_snapshot}
-
-                User message:
-                {user_message}
-                """
-            ).strip()
-        )
+        prompt = self.ChatPromptTemplate.from_template(CHAT_ABOUT_SITE_PROMPT)
 
         chain = prompt | self.model | self.StrOutputParser()
         return chain.invoke(
