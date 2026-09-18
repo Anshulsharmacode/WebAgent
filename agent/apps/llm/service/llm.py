@@ -7,6 +7,7 @@ import litellm
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
+from pydantic import BaseModel
 
 from .plan import WebsitePlan
 from .prompts import (
@@ -63,8 +64,21 @@ class ChatLiteLLM(BaseChatModel):
             completion_kwargs["stop"] = stop
 
         response = litellm.completion(**completion_kwargs)
-        content = response.choices[0].message.content or ""
-        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=content))])
+
+        content = ""
+        if hasattr(response, "choices") and response.choices:
+            choice = response.choices[0]
+            if hasattr(choice, "message") and choice.message:
+                msg_content = getattr(choice.message, "content", "")
+                if msg_content is not None:
+                    content = msg_content if isinstance(msg_content, str) else json.dumps(msg_content)
+            elif isinstance(choice, dict):
+                msg = choice.get("message", {})
+                msg_content = msg.get("content", "")
+                if msg_content is not None:
+                    content = msg_content if isinstance(msg_content, str) else json.dumps(msg_content)
+
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content=str(content)))])
 
 
 class LLMService:
@@ -127,7 +141,14 @@ class LLMService:
         return cls.REACT_FILES if normalized == "react" else cls.CLASSIC_FILES
 
     @staticmethod
-    def _parse_json_object(raw: str) -> dict:
+    def _parse_json_object(raw: Any) -> dict:
+        if isinstance(raw, dict):
+            return raw
+        if isinstance(raw, BaseModel):
+            return raw.model_dump()
+        if not isinstance(raw, str):
+            raw = str(raw)
+
         try:
             return json.loads(raw)
         except json.JSONDecodeError:
@@ -150,13 +171,28 @@ class LLMService:
         prompt = self.ChatPromptTemplate.from_template(WEBSITE_PLAN_PROMPT)
 
         chain = prompt | self.model | parser
-        return chain.invoke(
+        res = chain.invoke(
             {
                 "user_prompt": user_prompt,
                 "project_type": normalized_type,
                 "format_instructions": parser.get_format_instructions(),
             }
         )
+
+        if isinstance(res, BaseModel):
+            plan_dict = res.model_dump()
+        elif isinstance(res, dict):
+            plan_dict = res
+        else:
+            plan_dict = self._parse_json_object(res)
+
+        return {
+            "name": plan_dict.get("name", "generated-site"),
+            "purpose": plan_dict.get("purpose", user_prompt),
+            "sections": plan_dict.get("sections", []),
+            "tone": plan_dict.get("tone", "professional"),
+            "primary_color": plan_dict.get("primary_color", "#1f6feb"),
+        }
 
     def generate_website_files(self, user_prompt: str, plan: dict, project_type: str = "classic_html") -> dict:
         normalized_type = self.normalize_project_type(project_type)
@@ -222,9 +258,10 @@ class LLMService:
         prompt = self.ChatPromptTemplate.from_template(CHAT_ABOUT_SITE_PROMPT)
 
         chain = prompt | self.model | self.StrOutputParser()
-        return chain.invoke(
+        res = chain.invoke(
             {
                 "site_snapshot": site_snapshot[:25000],
                 "user_message": user_message,
             }
         )
+        return str(res)
