@@ -1,5 +1,8 @@
 import { useMemo, useRef, useEffect } from "react";
 import { downloadProject } from "../api/website";
+import { Download, ExternalLink, Globe, Monitor, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 type PreviewPaneProps = {
   siteUrl?: string;
@@ -9,74 +12,34 @@ type PreviewPaneProps = {
 export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Fix localhost URL if needed
   const fixedSiteUrl = useMemo(() => {
-    if (!siteUrl) {
-      console.log("PreviewPane: No siteUrl provided");
-      return undefined;
-    }
-    console.log("PreviewPane: Original siteUrl:", siteUrl);
-
+    if (!siteUrl) return undefined;
     let url = siteUrl;
 
-    // If localhost, we need to check if we're accessing from localhost too
     if (url.includes("localhost")) {
-      // If the current page is also on localhost, keep localhost
       if (
-        window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1"
+        window.location.hostname !== "localhost" &&
+        window.location.hostname !== "127.0.0.1"
       ) {
-        console.log(
-          "PreviewPane: Current page is on localhost, keeping localhost",
-        );
-      } else {
-        // If current page is on a different hostname, replace localhost with that hostname
-        const hostname = window.location.hostname;
-        url = url.replace("localhost", hostname);
-        console.log(
-          "PreviewPane: Replaced localhost with",
-          hostname,
-          "->",
-          url,
-        );
+        url = url.replace("localhost", window.location.hostname);
       }
     }
 
-    // Ensure protocol
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       url = `http://${url}`;
     }
 
-    console.log("PreviewPane: Final URL:", url);
     return url;
   }, [siteUrl]);
 
-  // Update iframe when URL changes
   useEffect(() => {
     if (iframeRef.current && fixedSiteUrl) {
-      console.log("PreviewPane: Setting iframe src to", fixedSiteUrl);
-
-      // Test if the URL is accessible before setting it
-      fetch(fixedSiteUrl, { method: "HEAD", mode: "no-cors" })
-        .then(() => {
-          console.log("PreviewPane: URL is accessible");
-          if (iframeRef.current) {
-            iframeRef.current.src = fixedSiteUrl;
-          }
-        })
-        .catch((error) => {
-          console.error("PreviewPane: URL is not accessible", error);
-          // Try anyway, maybe it's a CORS issue
-          if (iframeRef.current) {
-            iframeRef.current.src = fixedSiteUrl;
-          }
-        });
+      iframeRef.current.src = fixedSiteUrl;
     }
   }, [fixedSiteUrl]);
 
   const handleRefresh = () => {
     if (iframeRef.current && fixedSiteUrl) {
-      console.log("PreviewPane: Refreshing iframe");
       iframeRef.current.src = fixedSiteUrl;
     }
   };
@@ -89,105 +52,101 @@ export function PreviewPane({ siteUrl, projectDir }: PreviewPaneProps) {
   };
 
   return (
-    <section className="preview-container">
-      <div className="preview-header">
-        <h2
-          className="field-label"
-          style={{
-            margin: 0,
-            fontSize: "0.875rem",
-            color: "var(--foreground)",
-          }}
-        >
-          Live Preview
-        </h2>
-        <div className="button-row">
+    <div className="flex-1 flex flex-col bg-background/50 overflow-hidden relative">
+      {/* Top Browser Bar */}
+      <div className="h-12 px-4 border-b border-border bg-card/60 flex items-center justify-between gap-3 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-secondary/80 border border-border text-xs min-w-0">
+            <Globe className="w-3.5 h-3.5 text-primary shrink-0" />
+            <span className="font-medium text-foreground shrink-0 text-[11px]">
+              Live Preview
+            </span>
+            {fixedSiteUrl ? (
+              <span className="text-[11px] font-mono text-muted-foreground truncate ml-1 max-w-[200px] sm:max-w-xs md:max-w-md">
+                {fixedSiteUrl}
+              </span>
+            ) : (
+              <Badge variant="outline" className="text-[10px] h-4 py-0 px-1 border-border font-normal text-muted-foreground ml-1">
+                Inactive
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Action Controls */}
+        <div className="flex items-center gap-1.5 shrink-0">
           {projectDir && (
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleDownload}
-              className="btn btn-ghost"
-              style={{
-                fontSize: "0.75rem",
-                height: "28px",
-                padding: "0 0.75rem",
-                cursor: "pointer",
-                border: "1px solid var(--border)",
-              }}
+              className="h-7 text-xs gap-1.5 px-2.5 border-border bg-card/60 hover:bg-accent"
+              title="Download Project ZIP"
             >
-              Download ZIP
-            </button>
+              <Download className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="hidden sm:inline">ZIP</span>
+            </Button>
           )}
+
           {fixedSiteUrl && (
             <>
-              <button
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleRefresh}
-                className="btn btn-ghost"
-                style={{
-                  fontSize: "0.75rem",
-                  height: "28px",
-                  padding: "0 0.75rem",
-                  cursor: "pointer",
-                  border: "1px solid var(--border)",
-                }}
+                className="h-7 text-xs gap-1.5 px-2.5 border-border bg-card/60 hover:bg-accent"
+                title="Refresh Preview"
               >
-                Refresh
-              </button>
-              <a
-                href={fixedSiteUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-ghost"
-                style={{
-                  fontSize: "0.75rem",
-                  height: "28px",
-                  padding: "0 0.75rem",
-                }}
+                <RefreshCw className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                className="h-7 text-xs gap-1.5 px-2.5 border-border bg-card/60 hover:bg-accent"
+                title="Open in new tab"
               >
-                Open Tab
-              </a>
+                <a href={fixedSiteUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="hidden sm:inline">Open</span>
+                </a>
+              </Button>
             </>
           )}
         </div>
-        {fixedSiteUrl && (
-          <div
-            style={{
-              fontSize: "0.7rem",
-              color: "var(--muted-foreground)",
-              marginTop: "8px",
-              padding: "0 0.5rem",
-              wordBreak: "break-all",
-            }}
-          >
-            Preview: {fixedSiteUrl}
-          </div>
-        )}
       </div>
 
-      <div className="preview-frame-wrapper">
-        {fixedSiteUrl ? (
-          <iframe
-            ref={iframeRef}
-            className="preview-frame"
-            src={fixedSiteUrl}
-            title="Generated website preview"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-top-navigation allow-popups-to-escape-sandbox allow-modals"
-            style={{ width: "100%", height: "100%", border: "none" }}
-            onError={() =>
-              console.error("Failed to load preview:", fixedSiteUrl)
-            }
-            onLoad={() => {
-              console.log(
-                "PreviewPane: Iframe loaded successfully from",
-                fixedSiteUrl,
-              );
-            }}
-          />
-        ) : (
-          <div className="empty-state">
-            <p>Generate a website to see the live preview here.</p>
-          </div>
-        )}
+      {/* Frame Wrapper */}
+      <div className="flex-1 p-3 bg-background/30 overflow-hidden">
+        <div className="w-full h-full rounded-xl bg-card border border-border shadow-xs overflow-hidden relative">
+          {fixedSiteUrl ? (
+            <iframe
+              ref={iframeRef}
+              className="w-full h-full border-none bg-white"
+              src={fixedSiteUrl}
+              title="Generated website preview"
+              sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-presentation allow-top-navigation allow-popups-to-escape-sandbox allow-modals"
+            />
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-muted-foreground p-6 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-secondary/80 border border-border flex items-center justify-center shadow-inner">
+                <Monitor className="w-6 h-6 text-muted-foreground/80" />
+              </div>
+              <div className="max-w-sm space-y-1">
+                <p className="text-xs font-semibold text-foreground">
+                  No preview currently active
+                </p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Enter a prompt in the sidebar and click{" "}
+                  <span className="text-primary font-medium">Generate Website</span> to launch your live preview.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </section>
+    </div>
   );
 }
