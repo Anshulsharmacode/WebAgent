@@ -1,278 +1,312 @@
-import { useEffect, useState } from 'react'
-import { getApiKeyModel, signInUser, signOutUser, signUpUser, updateApiKeyModel } from '../api/auth'
-import { getAccessToken } from '../api/http'
+import { useState } from "react";
+import { updateApiKeyModel } from "../api/auth";
+import { AI_MODELS } from "../constants/models";
+import { useAuth } from "../hooks/useAuth";
+import { useSettings } from "../hooks/useSettings";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  CheckCircle2,
+  LogOut,
+  Key,
+  Cpu,
+  ShieldCheck,
+  AlertCircle,
+} from "lucide-react";
 
 type SettingsModalProps = {
-  isOpen: boolean
-  onClose: () => void
-  onSaved: (apiKey?: string, modelName?: string) => void
-}
+  isOpen: boolean;
+  onClose: () => void;
+};
 
-export function SettingsModal({ isOpen, onClose, onSaved }: SettingsModalProps) {
-  const [tab, setTab] = useState<'auth' | 'config'>('auth')
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
+export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
+  const [tab, setTab] = useState<string>("auth");
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
 
-  const [apiKey, setApiKey] = useState('')
-  const [modelName, setModelName] = useState('gemini-2.5-flash')
-
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [isLoggedIn, setIsLoggedIn] = useState(Boolean(getAccessToken()))
-
-  useEffect(() => {
-    if (isOpen && isLoggedIn) {
-      loadConfig()
-    }
-  }, [isOpen, isLoggedIn])
-
-  async function loadConfig() {
-    try {
-      const data = await getApiKeyModel()
-      if (data.api_key) setApiKey(data.api_key)
-      if (data.model_name) setModelName(data.model_name)
-    } catch {
-      // Ignored if unauthenticated or error
-    }
-  }
+  const { apiKey, setApiKey, modelName, setModelName, isLoggedIn } = useSettings();
+  const { loading, message, setMessage, signIn, signUp, signOut } = useAuth();
+  const [saveLoading, setSaveLoading] = useState(false);
 
   async function handleAuth(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setMessage('')
-    try {
-      if (authMode === 'signup') {
-        const res = await signUpUser({ email, password, username: username || email.split('@')[0] })
-        setMessage(res.message || 'Account created successfully! Please sign in.')
-        setAuthMode('signin')
-      } else {
-        await signInUser({ email, password })
-        setIsLoggedIn(true)
-        setMessage('Signed in successfully!')
-        setTab('config')
-        await loadConfig()
-      }
-    } catch (err) {
-      setMessage((err as Error).message)
-    } finally {
-      setLoading(false)
+    e.preventDefault();
+    if (authMode === "signup") {
+      const success = await signUp({
+        email,
+        password,
+        username: username || email.split("@")[0],
+      });
+      if (success) setAuthMode("signin");
+    } else {
+      const success = await signIn({ email, password });
+      if (success) setTab("config");
     }
   }
 
   async function handleSaveConfig(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setMessage('')
+    e.preventDefault();
+    setSaveLoading(true);
+    setMessage("");
     try {
       if (isLoggedIn) {
-        await updateApiKeyModel({ api_key: apiKey.trim(), model_name: modelName.trim() })
+        await updateApiKeyModel({
+          api_key: apiKey.trim(),
+          model_name: modelName.trim(),
+        });
       }
-      onSaved(apiKey.trim(), modelName.trim())
-      setMessage('Settings saved successfully!')
+      setMessage("Settings saved successfully!");
       setTimeout(() => {
-        onClose()
-      }, 800)
+        onClose();
+      }, 800);
     } catch (err) {
-      setMessage((err as Error).message)
+      setMessage((err as Error).message);
     } finally {
-      setLoading(false)
+      setSaveLoading(false);
     }
   }
 
-  function handleSignOut() {
-    signOutUser()
-    setIsLoggedIn(false)
-    setMessage('Signed out.')
-    setApiKey('')
-  }
-
-  if (!isOpen) return null
+  const isErrorMessage =
+    message.toLowerCase().includes("failed") ||
+    message.toLowerCase().includes("error") ||
+    message.toLowerCase().includes("no active account") ||
+    message.toLowerCase().includes("unauthorized");
 
   return (
-    <div className="modal-overlay" style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(4px)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    }}>
-      <div className="panel" style={{
-        width: '450px',
-        maxWidth: '90vw',
-        background: '#18181b',
-        border: '1px solid #27272a',
-        borderRadius: '12px',
-        padding: '1.5rem',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem' }}>Account & Settings</h2>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#a1a1aa',
-              cursor: 'pointer',
-              fontSize: '1.25rem',
-            }}
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-card border-border">
+        <DialogHeader className="pb-1">
+          <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-primary" />
+            <span>Account & Configuration</span>
+          </DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Manage your credentials, authentication, and AI provider keys.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid #27272a', paddingBottom: '0.5rem' }}>
-          <button
-            className={`btn ${tab === 'auth' ? 'btn-primary' : ''}`}
-            onClick={() => setTab('auth')}
-            style={{ flex: 1, padding: '0.4rem' }}
-          >
-            {isLoggedIn ? 'Account Status' : 'Sign In / Sign Up'}
-          </button>
-          <button
-            className={`btn ${tab === 'config' ? 'btn-primary' : ''}`}
-            onClick={() => setTab('config')}
-            style={{ flex: 1, padding: '0.4rem' }}
-          >
-            API & Model Config
-          </button>
-        </div>
-
+        {/* Status Message */}
         {message && (
-          <div style={{
-            padding: '0.6rem 0.8rem',
-            borderRadius: '6px',
-            fontSize: '0.85rem',
-            marginBottom: '1rem',
-            background: message.toLowerCase().includes('failed') || message.toLowerCase().includes('error') || message.toLowerCase().includes('no active account') || message.toLowerCase().includes('unauthorized') ? '#450a0a' : '#064e3b',
-            color: message.toLowerCase().includes('failed') || message.toLowerCase().includes('error') || message.toLowerCase().includes('no active account') || message.toLowerCase().includes('unauthorized') ? '#fca5a5' : '#6ee7b7',
-          }}>
-            {message}
+          <div
+            className={`p-3 rounded-lg text-xs flex items-center gap-2 font-medium ${
+              isErrorMessage
+                ? "bg-destructive/15 border border-destructive/30 text-destructive"
+                : "bg-emerald-950/40 border border-emerald-800/50 text-emerald-400"
+            }`}
+          >
+            {isErrorMessage ? (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+            )}
+            <span>{message}</span>
           </div>
         )}
 
-        {tab === 'auth' && (
-          <div>
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
+          <TabsList className="w-full grid grid-cols-2 bg-secondary/80 p-1 border border-border/60">
+            <TabsTrigger value="auth" className="text-xs">
+              {isLoggedIn ? "Account Status" : "Authentication"}
+            </TabsTrigger>
+            <TabsTrigger value="config" className="text-xs">
+              AI & API Keys
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Authentication Tab */}
+          <TabsContent value="auth" className="pt-3">
             {isLoggedIn ? (
-              <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-                <p style={{ color: '#22c55e', fontWeight: 600, marginBottom: '0.5rem' }}>✓ Logged In</p>
-                <p style={{ fontSize: '0.875rem', color: '#a1a1aa', marginBottom: '1.5rem' }}>Your API keys and model settings will be synced with your account.</p>
-                <button className="btn btn-destructive" onClick={handleSignOut} style={{ width: '100%' }}>
-                  Sign Out
-                </button>
+              <div className="flex flex-col items-center py-5 text-center gap-3 bg-secondary/40 rounded-xl border border-border/60 p-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                  <CheckCircle2 className="w-6 h-6 text-primary" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Connected & Signed In
+                  </h3>
+                  <p className="text-xs text-muted-foreground max-w-xs leading-relaxed">
+                    Your API keys and session preferences will sync across your workspaces automatically.
+                  </p>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full mt-2 text-xs gap-2"
+                  onClick={signOut}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </Button>
               </div>
             ) : (
-              <form onSubmit={handleAuth}>
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <form onSubmit={handleAuth} className="flex flex-col gap-3.5">
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-secondary/60 rounded-lg border border-border/60">
                   <button
                     type="button"
-                    style={{ flex: 1, background: authMode === 'signin' ? '#27272a' : 'transparent', border: 'none', color: '#fff', padding: '0.4rem', borderRadius: '4px', cursor: 'pointer' }}
-                    onClick={() => setAuthMode('signin')}
+                    className={`py-1 text-xs font-medium rounded-md transition-colors ${
+                      authMode === "signin"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => setAuthMode("signin")}
                   >
                     Sign In
                   </button>
                   <button
                     type="button"
-                    style={{ flex: 1, background: authMode === 'signup' ? '#27272a' : 'transparent', border: 'none', color: '#fff', padding: '0.4rem', borderRadius: '4px', cursor: 'pointer' }}
-                    onClick={() => setAuthMode('signup')}
+                    className={`py-1 text-xs font-medium rounded-md transition-colors ${
+                      authMode === "signup"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    onClick={() => setAuthMode("signup")}
                   >
                     Sign Up
                   </button>
                 </div>
 
-                {authMode === 'signup' && (
-                  <div className="field-group" style={{ marginBottom: '0.75rem' }}>
-                    <label className="field-label">Username</label>
-                    <input
+                {authMode === "signup" && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="auth-username" className="text-xs font-medium text-muted-foreground">
+                      Username
+                    </Label>
+                    <Input
+                      id="auth-username"
                       type="text"
-                      className="field-input"
                       placeholder="Username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
+                      className="h-8 text-xs bg-background/50 border-border"
                     />
                   </div>
                 )}
 
-                <div className="field-group" style={{ marginBottom: '0.75rem' }}>
-                  <label className="field-label">Email</label>
-                  <input
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="auth-email" className="text-xs font-medium text-muted-foreground">
+                    Email Address
+                  </Label>
+                  <Input
+                    id="auth-email"
                     type="email"
-                    className="field-input"
-                    placeholder="email@example.com"
+                    placeholder="you@example.com"
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="h-8 text-xs bg-background/50 border-border"
                   />
                 </div>
 
-                <div className="field-group" style={{ marginBottom: '1.25rem' }}>
-                  <label className="field-label">Password</label>
-                  <input
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="auth-password" className="text-xs font-medium text-muted-foreground">
+                    Password
+                  </Label>
+                  <Input
+                    id="auth-password"
                     type="password"
-                    className="field-input"
                     placeholder="••••••••"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-8 text-xs bg-background/50 border-border"
                   />
                 </div>
 
-                <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                  {loading ? 'Processing...' : authMode === 'signin' ? 'Sign In' : 'Sign Up'}
-                </button>
+                <Button
+                  variant="default"
+                  type="submit"
+                  className="w-full mt-2 h-9 text-xs font-semibold"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent mr-1" />
+                      <span>Processing...</span>
+                    </>
+                  ) : authMode === "signin" ? (
+                    "Sign In to Account"
+                  ) : (
+                    "Create Account"
+                  )}
+                </Button>
               </form>
             )}
-          </div>
-        )}
+          </TabsContent>
 
-        {tab === 'config' && (
-          <form onSubmit={handleSaveConfig}>
-            <div className="field-group" style={{ marginBottom: '0.75rem' }}>
-              <label className="field-label">API Key</label>
-              <input
-                type="password"
-                className="field-input"
-                placeholder="AIzaSy... / sk-..."
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
-              <span style={{ fontSize: '0.75rem', color: '#71717a', marginTop: '0.25rem' }}>
-                Used for Gemini, OpenAI, Anthropic, DeepSeek, or Groq calls.
-              </span>
-            </div>
+          {/* Config Tab */}
+          <TabsContent value="config" className="pt-3">
+            <form onSubmit={handleSaveConfig} className="flex flex-col gap-3.5">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cfg-key" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-primary" />
+                  <span>API Key</span>
+                </Label>
+                <Input
+                  id="cfg-key"
+                  type="password"
+                  className="h-8 text-xs font-mono bg-background/50 border-border"
+                  placeholder="AIzaSy... / sk-..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                />
+                <span className="text-[11px] text-muted-foreground/70">
+                  Universal key used for Gemini, OpenAI, Claude, DeepSeek, or Groq.
+                </span>
+              </div>
 
-            <div className="field-group" style={{ marginBottom: '1.25rem' }}>
-              <label className="field-label">Default Model Name</label>
-              <select
-                className="field-input"
-                value={modelName}
-                onChange={(e) => setModelName(e.target.value)}
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cfg-model" className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                  <Cpu className="w-3.5 h-3.5 text-primary" />
+                  <span>Default AI Model</span>
+                </Label>
+                <Select value={modelName} onValueChange={setModelName}>
+                  <SelectTrigger id="cfg-model" className="h-8 w-full text-xs font-mono bg-background/50 border-border">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60">
+                    {AI_MODELS.map((m) => (
+                      <SelectItem key={m.value} value={m.value} className="text-xs font-mono">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-sans px-1 py-0.5 rounded bg-secondary text-muted-foreground">
+                            {m.provider}
+                          </span>
+                          <span>{m.label}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Button
+                variant="default"
+                type="submit"
+                className="w-full mt-2 h-9 text-xs font-semibold"
+                disabled={saveLoading}
               >
-                <option value="gemini-2.5-flash">Google Gemini 2.5 Flash</option>
-                <option value="gemini-1.5-pro">Google Gemini 1.5 Pro</option>
-                <option value="gpt-4o">OpenAI GPT-4o</option>
-                <option value="gpt-4o-mini">OpenAI GPT-4o Mini</option>
-                <option value="claude-3-5-sonnet-20241022">Anthropic Claude 3.5 Sonnet</option>
-                <option value="deepseek/deepseek-chat">DeepSeek Chat (V3)</option>
-                <option value="groq/llama-3.3-70b-versatile">Groq Llama 3.3 70B</option>
-              </select>
-            </div>
-
-            <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-              {loading ? 'Saving...' : 'Save Settings'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
-  )
+                {saveLoading ? "Saving Configuration..." : "Save Configuration"}
+              </Button>
+            </form>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
 }
