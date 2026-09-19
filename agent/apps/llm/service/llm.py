@@ -265,3 +265,73 @@ class LLMService:
             }
         )
         return str(res)
+
+    async def stream_generate_website_files(self, user_prompt: str, plan: dict, project_type: str = "classic_html"):
+        normalized_type = self.normalize_project_type(project_type)
+        output_shape = REACT_OUTPUT_SHAPE if normalized_type == "react" else CLASSIC_OUTPUT_SHAPE
+        requirements = REACT_REQUIREMENTS if normalized_type == "react" else CLASSIC_REQUIREMENTS
+
+        prompt_str = GENERATE_WEBSITE_FILES_PROMPT.format(
+            project_type=normalized_type,
+            user_prompt=user_prompt,
+            plan_json=json.dumps(plan),
+            output_shape=output_shape,
+            requirements=requirements,
+        )
+
+        response = await litellm.acompletion(
+            model=self.model.model_name,
+            api_key=self.model.api_key,
+            messages=[{"role": "user", "content": prompt_str}],
+            temperature=0.3,
+            stream=True,
+        )
+
+        full_content = ""
+        async for chunk in response:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                full_content += delta
+                yield delta, None
+
+        result = self._parse_json_object(full_content)
+        for key in self.required_files_for_type(normalized_type):
+            if key not in result:
+                raise ValueError(f"Missing '{key}' in generated files.")
+        yield "", result
+
+    async def stream_apply_website_changes(self, files: dict, user_message: str, project_type: str = "classic_html"):
+        normalized_type = self.normalize_project_type(project_type)
+        required_files = self.required_files_for_type(normalized_type)
+        output_shape = REACT_EDIT_OUTPUT_SHAPE if normalized_type == "react" else CLASSIC_EDIT_OUTPUT_SHAPE
+        rules = REACT_EDIT_RULES if normalized_type == "react" else CLASSIC_EDIT_RULES
+
+        prompt_str = APPLY_WEBSITE_CHANGES_PROMPT.format(
+            project_type=normalized_type,
+            user_message=user_message,
+            files_json=json.dumps(files),
+            output_shape=output_shape,
+            rules=rules,
+        )
+
+        response = await litellm.acompletion(
+            model=self.model.model_name,
+            api_key=self.model.api_key,
+            messages=[{"role": "user", "content": prompt_str}],
+            temperature=0.3,
+            stream=True,
+        )
+
+        full_content = ""
+        async for chunk in response:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                full_content += delta
+                yield delta, None
+
+        result = self._parse_json_object(full_content)
+        for key in required_files:
+            if key not in result:
+                raise ValueError(f"Missing '{key}' in updated files.")
+        yield "", result
+
