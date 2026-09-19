@@ -33,16 +33,20 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
+
+
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'rest_framework',
-    'rest_framework_simplejwt.token_blacklist',
-    'apps.llm',
-    'apps.accounts'
+    "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
+    "channels",
+    "apps.llm",
+    "apps.accounts",
 ]
 
 MIDDLEWARE = [
@@ -73,6 +77,14 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "agent.wsgi.application"
+ASGI_APPLICATION = "agent.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    },
+}
+
 
 
 # Database
