@@ -26,6 +26,7 @@ function App() {
     buildResult,
     loading,
     status,
+    streamingCode,
     siteUrl,
     projectDir,
     files,
@@ -68,13 +69,20 @@ function App() {
 
         {/* Right Preview & Assistant Pane */}
         <main className="flex-1 flex flex-col overflow-hidden bg-background">
-          <PreviewPane siteUrl={siteUrl} projectDir={projectDir} />
+          <PreviewPane
+            siteUrl={siteUrl}
+            projectDir={projectDir}
+            loading={loading}
+            status={status}
+            streamingCode={streamingCode}
+          />
           <ChatPanel
             messages={messages}
             messageInput={messageInput}
             applyChanges={applyChanges}
             loading={loading}
             canSend={Boolean(buildResult && messageInput.trim())}
+            streamingCode={streamingCode}
             onMessageInputChange={setMessageInput}
             onApplyChangesChange={setApplyChanges}
             onSend={handleSend}

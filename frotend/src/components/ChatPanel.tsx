@@ -21,6 +21,7 @@ type ChatPanelProps = {
   applyChanges: boolean;
   loading: boolean;
   canSend: boolean;
+  streamingCode?: string;
   onMessageInputChange: (val: string) => void;
   onApplyChangesChange: (val: boolean) => void;
   onSend: () => void;
@@ -32,6 +33,7 @@ export function ChatPanel({
   applyChanges,
   loading,
   canSend,
+  streamingCode,
   onMessageInputChange,
   onApplyChangesChange,
   onSend,
@@ -161,7 +163,19 @@ export function ChatPanel({
                 </div>
               ))
             )}
+            {loading && Boolean(streamingCode) && (
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-[11px] leading-relaxed overflow-x-auto shadow-inner my-1">
+                <div className="flex items-center gap-2 mb-1.5 text-slate-400 font-sans text-[10px] uppercase tracking-wider font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>LLM Live Stream</span>
+                </div>
+                <pre className="whitespace-pre-wrap max-h-36 overflow-y-auto custom-scrollbar font-mono text-[11px]">
+                  {streamingCode}
+                </pre>
+              </div>
+            )}
             <div ref={messagesEndRef} />
+
           </div>
 
           {/* GPT-Style Input Bar */}
