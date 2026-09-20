@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { buildWebsite, chatWebsite, stopWebsite } from '../api/website';
+import { stopWebsite } from '../api/website';
 import type { BuildWebsiteResponse, ChatWebsiteResponse, ProjectType } from '../types/website';
 
 export type Message = {
@@ -17,13 +17,13 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
   const [projectName, setProjectName] = useState('');
   const [projectType, setProjectType] = useState<ProjectType>('react');
 
-  const [applyChanges, setApplyChanges] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [buildResult, setBuildResult] = useState<BuildWebsiteResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState('Ready');
   const [streamingCode, setStreamingCode] = useState('');
+  const [streamingFiles, setStreamingFiles] = useState<Record<string, string>>({});
   const socketRef = useRef<WebSocket | null>(null);
 
   const siteUrl = buildResult?.site_url;
@@ -77,29 +77,19 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
     setStatus('Ready');
   }
 
-  function runWebSocketTask(
-    payload: any,
-    onComplete: (data: any) => void,
-    onFallback: () => Promise<void>
-  ) {
+  function runWebSocketTask(payload: any, onComplete: (data: any) => void) {
     setStreamingCode('');
+    setStreamingFiles({});
     let ws: WebSocket;
-    let fallbackTriggered = false;
-
-    const triggerFallback = async () => {
-      if (fallbackTriggered) return;
-      fallbackTriggered = true;
-      console.warn('WebSocket failed or unavailable, falling back to HTTP...');
-      await onFallback();
-    };
 
     try {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.port ? `${window.location.hostname}:8000` : window.location.host;
       ws = new WebSocket(`${wsProtocol}//${host}/ws/llm/stream/`);
       socketRef.current = ws;
-    } catch {
-      triggerFallback();
+    } catch (err) {
+      setStatus('WebSocket connection failed.');
+      setLoading(false);
       return;
     }
 
@@ -112,6 +102,12 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
         const data = JSON.parse(event.data);
         if (data.type === 'status') {
           setStatus(data.message);
+        } else if (data.type === 'file_chunk') {
+          // Per-file streaming — accumulate content keyed by filename
+          setStreamingFiles((prev) => ({
+            ...prev,
+            [data.filename]: (prev[data.filename] ?? '') + data.content,
+          }));
         } else if (data.type === 'chunk') {
           setStreamingCode((prev) => prev + data.content);
           if (data.target === 'chat') {
@@ -140,9 +136,11 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
       }
     };
 
-    ws.onerror = () => {
+    ws.onerror = (err) => {
+      console.error('WebSocket error:', err);
+      setStatus('WebSocket Connection Error');
+      setLoading(false);
       ws.close();
-      triggerFallback();
     };
   }
 
@@ -161,29 +159,11 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
       api_key: apiKey.trim() || undefined,
     };
 
-    const httpFallback = async () => {
-      setStatus('Generating website (HTTP)...');
-      try {
-        const result = await buildWebsite(payload);
-        setBuildResult(result);
-        setMessages([]);
-        setStatus('Website generated successfully.');
-      } catch (error) {
-        setStatus((error as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    runWebSocketTask(
-      payload,
-      (result: BuildWebsiteResponse) => {
-        setBuildResult(result);
-        setMessages([]);
-        setStatus('Website generated successfully.');
-      },
-      httpFallback
-    );
+    runWebSocketTask(payload, (result: BuildWebsiteResponse) => {
+      setBuildResult(result);
+      setMessages([]);
+      setStatus('Website generated successfully.');
+    });
   }
 
   async function handleSend() {
@@ -193,13 +173,12 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
     setLoading(true);
     setMessageInput('');
     setMessages((prev) => [...prev, { role: 'user', content: currentMessage }]);
-    setStatus(applyChanges ? 'Applying changes...' : 'Thinking...');
+    setStatus('Analyzing request...');
 
     const payload = {
       action: 'chat',
       site_url: buildResult.site_url,
       message: currentMessage,
-      apply_changes: applyChanges,
       project_dir: buildResult.project_dir,
       project_name: buildResult.plan?.name ?? (projectName.trim() || undefined),
       container_name: buildResult.container_name,
@@ -208,28 +187,9 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
       api_key: apiKey.trim() || undefined,
     };
 
-    const httpFallback = async () => {
-      try {
-        const response = await chatWebsite(payload);
-        applyChatResponse(response);
-      } catch (error) {
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: (error as Error).message },
-        ]);
-        setStatus((error as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    runWebSocketTask(
-      payload,
-      (response: ChatWebsiteResponse) => {
-        applyChatResponse(response);
-      },
-      httpFallback
-    );
+    runWebSocketTask(payload, (response: ChatWebsiteResponse) => {
+      applyChatResponse(response);
+    });
   }
 
   async function handleStop() {
@@ -256,8 +216,6 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
     setProjectName,
     projectType,
     setProjectType,
-    applyChanges,
-    setApplyChanges,
     messageInput,
     setMessageInput,
     messages,
@@ -265,6 +223,7 @@ export function useWebsiteBuilder({ apiKey, modelName }: UseWebsiteBuilderOption
     loading,
     status,
     streamingCode,
+    streamingFiles,
     siteUrl,
     projectDir,
     files,
