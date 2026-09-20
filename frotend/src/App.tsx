@@ -18,8 +18,6 @@ function App() {
     setProjectName,
     projectType,
     setProjectType,
-    applyChanges,
-    setApplyChanges,
     messageInput,
     setMessageInput,
     messages,
@@ -27,6 +25,7 @@ function App() {
     loading,
     status,
     streamingCode,
+    streamingFiles,
     siteUrl,
     projectDir,
     files,
@@ -75,16 +74,15 @@ function App() {
             loading={loading}
             status={status}
             streamingCode={streamingCode}
+            streamingFiles={streamingFiles}
           />
           <ChatPanel
             messages={messages}
             messageInput={messageInput}
-            applyChanges={applyChanges}
             loading={loading}
             canSend={Boolean(buildResult && messageInput.trim())}
             streamingCode={streamingCode}
             onMessageInputChange={setMessageInput}
-            onApplyChangesChange={setApplyChanges}
             onSend={handleSend}
           />
         </main>
