@@ -3,7 +3,7 @@ import shutil
 import tempfile
 from pathlib import Path
 from django.conf import settings
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync, sync_to_async
 
 from .chat import ChatService
 from .docker import DockerService
@@ -69,6 +69,21 @@ class WebsiteAgentService:
 
     # ── Build ────────────────────────────────────────────────────────────────
 
+    def create_and_run_website(
+        self,
+        prompt: str,
+        project_name: str | None = None,
+        port: int | None = None,
+        project_type: str = "classic_html",
+    ) -> dict:
+        """Synchronously creates and runs a website."""
+        return async_to_sync(self.stream_create_website)(
+            prompt=prompt,
+            project_name=project_name,
+            port=port,
+            project_type=project_type,
+        )
+
     async def stream_create_website(
         self,
         prompt: str,
@@ -124,10 +139,32 @@ class WebsiteAgentService:
 
     # ── Chat ─────────────────────────────────────────────────────────────────
 
+    def chat_with_website(
+        self,
+        site_url: str,
+        message: str,
+        apply_changes: bool = False,
+        project_dir: str | None = None,
+        project_name: str | None = None,
+        container_name: str | None = None,
+        project_type: str | None = None,
+    ) -> dict:
+        """Synchronously chats with or edits a website."""
+        return async_to_sync(self.stream_chat_website)(
+            site_url=site_url,
+            message=message,
+            apply_changes=apply_changes,
+            project_dir=project_dir,
+            project_name=project_name,
+            container_name=container_name,
+            project_type=project_type,
+        )
+
     async def stream_chat_website(
         self,
         site_url: str,
         message: str,
+        apply_changes: bool = False,
         project_dir: str | None = None,
         project_name: str | None = None,
         container_name: str | None = None,
@@ -141,7 +178,10 @@ class WebsiteAgentService:
         # --- Intent detection (pure string matching, instant) ---
         should_apply = False
         if project_dir and Path(project_dir).exists():
-            should_apply = await sync_to_async(self.llm.should_apply_changes)(message)
+            if apply_changes:
+                should_apply = True
+            else:
+                should_apply = await sync_to_async(self.llm.should_apply_changes)(message)
 
         # ── Conversational Q&A path ──────────────────────────────────────────
         if not should_apply:
