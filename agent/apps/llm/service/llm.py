@@ -9,7 +9,6 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import BaseModel
 
-from .plan import WebsitePlan
 from .prompts import (
     APPLY_WEBSITE_CHANGES_PROMPT,
     CHAT_ABOUT_SITE_PROMPT,
@@ -22,7 +21,6 @@ from .prompts import (
     REACT_EDIT_RULES,
     REACT_OUTPUT_SHAPE,
     REACT_REQUIREMENTS,
-    WEBSITE_PLAN_PROMPT,
 )
 
 
@@ -165,103 +163,126 @@ class LLMService:
 
         raise ValueError("Model did not return valid JSON.")
 
-    def create_website_plan(self, user_prompt: str, project_type: str = "classic_html") -> dict:
-        normalized_type = self.normalize_project_type(project_type)
-        parser = self.JsonOutputParser(pydantic_object=WebsitePlan)
-        prompt = self.ChatPromptTemplate.from_template(WEBSITE_PLAN_PROMPT)
+    def should_apply_changes(self, user_message: str) -> bool:
+        """
+        Determines if user wants code changes applied to their website
+        or if they are purely asking an informational question.
+        """
+        text = user_message.strip().lower()
 
-        chain = prompt | self.model | parser
-        res = chain.invoke(
-            {
-                "user_prompt": user_prompt,
-                "project_type": normalized_type,
-                "format_instructions": parser.get_format_instructions(),
-            }
-        )
-
-        if isinstance(res, BaseModel):
-            plan_dict = res.model_dump()
-        elif isinstance(res, dict):
-            plan_dict = res
-        else:
-            plan_dict = self._parse_json_object(res)
-
-        return {
-            "name": plan_dict.get("name", "generated-site"),
-            "purpose": plan_dict.get("purpose", user_prompt),
-            "sections": plan_dict.get("sections", []),
-            "tone": plan_dict.get("tone", "professional"),
-            "primary_color": plan_dict.get("primary_color", "#1f6feb"),
+        # 1. Action Verbs & Key UI Elements -> Apply Mode (True)
+        action_verbs = {
+            "add", "change", "update", "fix", "remove", "make", "set", "replace",
+            "create", "style", "modify", "build", "design", "refactor", "put",
+            "turn", "convert", "align", "center", "hide", "show", "increase",
+            "decrease", "adjust", "move", "rename", "delete", "use", "improve",
+            "edit", "rewrite", "color", "background", "text", "font", "header",
+            "footer", "button", "layout", "nav", "navbar", "hero", "card", "theme"
         }
+        words = set(re.findall(r"\b\w+\b", text))
+        if words.intersection(action_verbs):
+            return True
 
-    def generate_website_files(self, user_prompt: str, plan: dict, project_type: str = "classic_html") -> dict:
-        normalized_type = self.normalize_project_type(project_type)
+        # 2. Pure Informational Question Prefixes without action -> Consultation Mode (False)
+        question_prefixes = ("what is", "why is", "how does", "what should", "explain", "tell me about")
+        if text.startswith(question_prefixes):
+            return False
 
-        if normalized_type == "react":
-            output_shape = REACT_OUTPUT_SHAPE
-            requirements = REACT_REQUIREMENTS
-        else:
-            output_shape = CLASSIC_OUTPUT_SHAPE
-            requirements = CLASSIC_REQUIREMENTS
+        # Default to applying changes for user messages in website copilot
+        return True
 
-        prompt = self.ChatPromptTemplate.from_template(GENERATE_WEBSITE_FILES_PROMPT)
 
-        chain = prompt | self.model | self.StrOutputParser()
-        raw = chain.invoke(
-            {
-                "project_type": normalized_type,
-                "user_prompt": user_prompt,
-                "plan_json": json.dumps(plan),
-                "output_shape": output_shape,
-                "requirements": requirements,
-            }
+    async def stream_chat_about_site(self, site_snapshot: str, user_message: str):
+        """Streams conversational AI responses / suggestions back to the user."""
+        prompt_str = CHAT_ABOUT_SITE_PROMPT.format(
+            site_snapshot=site_snapshot[:25000],
+            user_message=user_message,
         )
-        result = self._parse_json_object(raw)
 
+        response = await litellm.acompletion(
+            model=self.model.model_name,
+            api_key=self.model.api_key,
+            messages=[{"role": "user", "content": prompt_str}],
+            temperature=0.3,
+            stream=True,
+        )
+
+        async for chunk in response:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                yield delta
+
+
+
+    async def stream_generate_website_files(self, user_prompt: str, project_type: str = "classic_html"):
+        normalized_type = self.normalize_project_type(project_type)
+        output_shape = REACT_OUTPUT_SHAPE if normalized_type == "react" else CLASSIC_OUTPUT_SHAPE
+        requirements = REACT_REQUIREMENTS if normalized_type == "react" else CLASSIC_REQUIREMENTS
+
+        prompt_str = GENERATE_WEBSITE_FILES_PROMPT.format(
+            project_type=normalized_type,
+            user_prompt=user_prompt,
+            output_shape=output_shape,
+            requirements=requirements,
+        )
+
+        response = await litellm.acompletion(
+            model=self.model.model_name,
+            api_key=self.model.api_key,
+            messages=[{"role": "user", "content": prompt_str}],
+            temperature=0.3,
+            stream=True,
+        )
+
+        full_content = ""
+        async for chunk in response:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                full_content += delta
+                yield delta, None
+
+        result = self._parse_json_object(full_content)
         for key in self.required_files_for_type(normalized_type):
             if key not in result:
                 raise ValueError(f"Missing '{key}' in generated files.")
-        return result
+        yield "", result
 
-    def apply_website_changes(self, files: dict, user_message: str, project_type: str = "classic_html") -> dict:
+    async def stream_apply_website_changes(self, files: dict, user_message: str, project_type: str = "classic_html"):
         normalized_type = self.normalize_project_type(project_type)
         required_files = self.required_files_for_type(normalized_type)
+        output_shape = REACT_EDIT_OUTPUT_SHAPE if normalized_type == "react" else CLASSIC_EDIT_OUTPUT_SHAPE
+        rules = REACT_EDIT_RULES if normalized_type == "react" else CLASSIC_EDIT_RULES
 
-        if normalized_type == "react":
-            output_shape = REACT_EDIT_OUTPUT_SHAPE
-            rules = REACT_EDIT_RULES
-        else:
-            output_shape = CLASSIC_EDIT_OUTPUT_SHAPE
-            rules = CLASSIC_EDIT_RULES
-
-        prompt = self.ChatPromptTemplate.from_template(APPLY_WEBSITE_CHANGES_PROMPT)
-
-        chain = prompt | self.model | self.StrOutputParser()
-        raw = chain.invoke(
-            {
-                "project_type": normalized_type,
-                "user_message": user_message,
-                "files_json": json.dumps(files),
-                "output_shape": output_shape,
-                "rules": rules,
-            }
+        prompt_str = APPLY_WEBSITE_CHANGES_PROMPT.format(
+            project_type=normalized_type,
+            user_message=user_message,
+            files_json=json.dumps(files),
+            output_shape=output_shape,
+            rules=rules,
         )
-        result = self._parse_json_object(raw)
 
-        for key in required_files:
-            if key not in result:
-                raise ValueError(f"Missing '{key}' in updated files.")
-
-        return result
-
-    def chat_about_site(self, site_snapshot: str, user_message: str) -> str:
-        prompt = self.ChatPromptTemplate.from_template(CHAT_ABOUT_SITE_PROMPT)
-
-        chain = prompt | self.model | self.StrOutputParser()
-        res = chain.invoke(
-            {
-                "site_snapshot": site_snapshot[:25000],
-                "user_message": user_message,
-            }
+        response = await litellm.acompletion(
+            model=self.model.model_name,
+            api_key=self.model.api_key,
+            messages=[{"role": "user", "content": prompt_str}],
+            temperature=0.3,
+            stream=True,
         )
-        return str(res)
+
+        full_content = ""
+        async for chunk in response:
+            delta = chunk.choices[0].delta.content or ""
+            if delta:
+                full_content += delta
+                yield delta, None
+
+        result = self._parse_json_object(full_content)
+        merged_files = dict(files)
+        for k, v in result.items():
+            if k != "summary":
+                merged_files[k] = v
+        if "summary" in result:
+            merged_files["summary"] = result["summary"]
+        yield "", merged_files
+
+

@@ -4,7 +4,6 @@ import {
   Send,
   Sparkles,
   User,
-  Check,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -18,22 +17,20 @@ type Message = {
 type ChatPanelProps = {
   messages: Message[];
   messageInput: string;
-  applyChanges: boolean;
   loading: boolean;
   canSend: boolean;
+  streamingCode?: string;
   onMessageInputChange: (val: string) => void;
-  onApplyChangesChange: (val: boolean) => void;
   onSend: () => void;
 };
 
 export function ChatPanel({
   messages,
   messageInput,
-  applyChanges,
   loading,
   canSend,
+  streamingCode,
   onMessageInputChange,
-  onApplyChangesChange,
   onSend,
 }: ChatPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
@@ -82,7 +79,7 @@ export function ChatPanel({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-foreground">
-              AI Assistant Chat & Modifier
+              AI Assistant Chat & Copilot
             </span>
             {messages.length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-medium">
@@ -121,11 +118,10 @@ export function ChatPanel({
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <p className="text-xs font-semibold text-foreground">
-                  Assistant Chat & Live Modifier
+                  AI Web Assistant & Interactive Copilot
                 </p>
                 <p className="text-[11px] text-muted-foreground max-w-sm leading-relaxed">
-                  Instruct the AI to modify code, add components, alter color
-                  schemes, or answer technical questions.
+                  Ask for design advice, request feature additions, or confirm proposed changes. Reply with "yes" or "apply" to implement changes live.
                 </p>
               </div>
             ) : (
@@ -161,36 +157,30 @@ export function ChatPanel({
                 </div>
               ))
             )}
+            {loading && Boolean(streamingCode) && (
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-emerald-400 font-mono text-[11px] leading-relaxed overflow-x-auto shadow-inner my-1">
+                <div className="flex items-center gap-2 mb-1.5 text-slate-400 font-sans text-[10px] uppercase tracking-wider font-semibold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>LLM Live Stream</span>
+                </div>
+                <pre className="whitespace-pre-wrap max-h-36 overflow-y-auto custom-scrollbar font-mono text-[11px]">
+                  {streamingCode}
+                </pre>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
           {/* GPT-Style Input Bar */}
           <div className="shrink-0 flex flex-col gap-2">
-            {/* Options Bar */}
-            <div className="flex items-center justify-between px-1">
-              <label className="flex items-center gap-2 text-[11px] font-medium text-muted-foreground hover:text-foreground cursor-pointer select-none transition-colors">
-                <div
-                  onClick={() => onApplyChangesChange(!applyChanges)}
-                  className={`w-3.5 h-3.5 rounded border flex items-center justify-center shrink-0 transition-colors ${
-                    applyChanges
-                      ? "bg-primary border-primary text-primary-foreground"
-                      : "bg-input border-border"
-                  }`}
-                >
-                  {applyChanges && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                </div>
-                <span>Apply edits directly to container files</span>
-              </label>
-            </div>
-
-            {/* GPT-like Multi-line Input Box */}
+            {/* Multi-line Input Box */}
             <div className="relative flex items-end rounded-2xl border border-border bg-muted/40 hover:bg-muted/60 focus-within:bg-background focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20 transition-all p-1.5 shadow-xs">
               <textarea
                 ref={textareaRef}
                 value={messageInput}
                 onChange={(e) => onMessageInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask a question or request a change (Shift+Enter for newline)..."
+                placeholder="Ask for suggestions or request changes (e.g. 'Add dark navbar' or 'Yes, apply changes')..."
                 rows={1}
                 className="flex-1 bg-transparent px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none resize-none min-h-[44px] max-h-[140px] leading-relaxed custom-scrollbar"
               />

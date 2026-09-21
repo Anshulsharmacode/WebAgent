@@ -1,49 +1,49 @@
+import asyncio
 import re
 from urllib.parse import urljoin
-from urllib.request import urlopen
 
 
 class ChatService:
-    """Fetches website context (HTML + linked CSS/JS) for chat Q&A."""
+    """Fetches website context (HTML snapshot) for conversational Q&A."""
 
     @staticmethod
-    def _fetch_text(url: str, timeout: int = 8) -> str:
-        with urlopen(url, timeout=timeout) as response:
-            return response.read().decode("utf-8", errors="ignore")
+    async def fetch_site_snapshot(site_url: str, timeout: float = 5.0) -> str:
+        """
+        Async HTTP fetch of the site's HTML with a strict timeout.
+        Only grabs the HTML — we skip fetching linked CSS/JS files since
+        the LLM already has the full source files from the project directory.
+        Falls back gracefully if the container is temporarily unavailable.
+        """
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    site_url,
+                    timeout=aiohttp.ClientTimeout(total=timeout),
+                    ssl=False,
+                ) as resp:
+                    html = await resp.text(errors="ignore")
 
-    @staticmethod
-    def fetch_site_snapshot(site_url: str) -> str:
-        html = ChatService._fetch_text(site_url)
+            # Pull inline styles/scripts only — no extra HTTP round-trips
+            inline_styles = re.findall(
+                r"<style[^>]*>(.*?)</style>",
+                html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            inline_scripts = re.findall(
+                r"<script(?![^>]+src=)[^>]*>(.*?)</script>",
+                html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
 
-        css_parts = []
-        js_parts = []
+            snapshot = (
+                "[HTML]\n"
+                + html[:15000]
+                + ("\n\n[INLINE CSS]\n" + "\n".join(inline_styles[:3]) if inline_styles else "")
+                + ("\n\n[INLINE JS]\n" + "\n".join(s[:3000] for s in inline_scripts[:3]) if inline_scripts else "")
+            )
+            return snapshot[:28000]
 
-        css_hrefs = re.findall(r'<link[^>]+href=["\']([^"\']+\.css[^"\']*)["\']', html, flags=re.IGNORECASE)
-        js_srcs = re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', html, flags=re.IGNORECASE)
-        inline_styles = re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.IGNORECASE | re.DOTALL)
-        inline_scripts = re.findall(r"<script(?![^>]+src=)[^>]*>(.*?)</script>", html, flags=re.IGNORECASE | re.DOTALL)
-
-        for href in css_hrefs:
-            try:
-                css_parts.append(ChatService._fetch_text(urljoin(site_url, href)))
-            except Exception:
-                continue
-
-        for src in js_srcs:
-            try:
-                js_parts.append(ChatService._fetch_text(urljoin(site_url, src)))
-            except Exception:
-                continue
-
-        css_parts.extend(inline_styles)
-        js_parts.extend(inline_scripts)
-
-        snapshot = (
-            "[HTML]\n"
-            + html[:12000]
-            + "\n\n[CSS]\n"
-            + "\n\n/* --- */\n\n".join(part[:6000] for part in css_parts[:4])
-            + "\n\n[JS]\n"
-            + "\n\n// ---\n\n".join(part[:5000] for part in js_parts[:4])
-        )
-        return snapshot[:30000]
+        except Exception:
+            # Container not reachable — return empty snapshot; LLM will still work
+            return ""

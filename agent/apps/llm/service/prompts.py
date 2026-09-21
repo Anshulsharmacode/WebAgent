@@ -6,37 +6,7 @@ and site consultation are stored here with detailed role instructions and rules.
 
 from textwrap import dedent
 
-# 1. PLANNER PROMPT
-WEBSITE_PLAN_PROMPT = dedent(
-    """
-    You are a Lead Web Architect and Product Designer.
-    Your mission is to transform user concepts into a structured, production-grade website architecture plan.
-
-    === INPUT DATA ===
-    User Concept / Request:
-    {user_prompt}
-
-    Target Project Type:
-    {project_type}
-
-    === INSTRUCTIONS ===
-    1. Analyze the user request for key requirements, target audience, layout, and visual aesthetic.
-    2. Formulate a comprehensive, cohesive plan specifying:
-       - 'name': A concise, descriptive kebab-case identifier (e.g., 'nexus-agency-portfolio').
-       - 'purpose': Clear statement of the site's primary objective.
-       - 'sections': An ordered list of core sections (e.g., Hero, Features, Portfolio/Showcase, Testimonials, Pricing, Contact, Footer).
-       - 'tone': Visual and content tone (e.g., 'Modern, clean, high-tech dark mode').
-       - 'primary_color': Main brand color in HEX format (e.g., '#6366f1').
-
-    === OUTPUT SCHEMA RULES ===
-    {format_instructions}
-
-    Return ONLY the valid JSON matching the schema above.
-    """
-).strip()
-
-
-# 2. GENERATION PROMPTS & SHAPES
+# 1. GENERATION PROMPTS & SHAPES
 REACT_OUTPUT_SHAPE = dedent(
     """
     {
@@ -89,9 +59,6 @@ GENERATE_WEBSITE_FILES_PROMPT = dedent(
     User Request:
     {user_prompt}
 
-    Architectural Plan:
-    {plan_json}
-
     === REQUIREMENTS & GUIDELINES ===
     {requirements}
 
@@ -108,12 +75,7 @@ GENERATE_WEBSITE_FILES_PROMPT = dedent(
 REACT_EDIT_OUTPUT_SHAPE = dedent(
     """
     {
-      "index.html": "...",
-      "package.json": "...",
-      "vite.config.js": "...",
-      "src/main.jsx": "...",
-      "src/App.jsx": "...",
-      "src/styles.css": "...",
+      "src/App.jsx": "complete updated code for modified file",
       "summary": "Concise 1-2 sentence summary of what changed"
     }
     """
@@ -122,9 +84,7 @@ REACT_EDIT_OUTPUT_SHAPE = dedent(
 CLASSIC_EDIT_OUTPUT_SHAPE = dedent(
     """
     {
-      "index.html": "...",
-      "styles.css": "...",
-      "script.js": "...",
+      "styles.css": "complete updated code for modified file",
       "summary": "Concise 1-2 sentence summary of what changed"
     }
     """
@@ -132,17 +92,19 @@ CLASSIC_EDIT_OUTPUT_SHAPE = dedent(
 
 REACT_EDIT_RULES = dedent(
     """
-    - Apply the requested changes while ensuring full compatibility with React + Vite.
+    - Output ONLY the file keys that need modification or creation to satisfy the request.
+    - Omit files that remain unchanged — do NOT re-output identical unchanged files.
+    - Provide complete, fully runnable code for each modified file (no placeholders or diff syntax).
     - Ensure all JSX components, state/hook declarations, and imports remain valid.
-    - Retain existing polished styling unless specifically asked to change theme colors or layout.
     """
 ).strip()
 
 CLASSIC_EDIT_RULES = dedent(
     """
-    - Apply the requested changes directly to HTML5, CSS3, or JS files.
+    - Output ONLY the file keys that need modification or creation to satisfy the request.
+    - Omit files that remain unchanged — do NOT re-output identical unchanged files.
+    - Provide complete, fully runnable code for each modified file (no placeholders or diff syntax).
     - Maintain proper linking between HTML, CSS, and JS.
-    - Retain responsive design and interactive scripts.
     """
 ).strip()
 
@@ -177,8 +139,9 @@ APPLY_WEBSITE_CHANGES_PROMPT = dedent(
 # 4. CHAT / CONSULTATION PROMPT
 CHAT_ABOUT_SITE_PROMPT = dedent(
     """
-    You are an expert AI Web Development Consultant and UX Auditor.
-    Your goal is to assist the user by answering questions, suggesting enhancements, or debugging issues based on their running site snapshot.
+
+    You are an expert AI Web Development Consultant and UX Architect.
+    Your goal is to assist the user by answering questions, suggesting enhancements, or discussing improvements based on their running site snapshot.
 
     === WEBSITE SNAPSHOT ===
     {site_snapshot}
@@ -187,8 +150,10 @@ CHAT_ABOUT_SITE_PROMPT = dedent(
     {user_message}
 
     === GUIDANCE ===
-    - Provide clear, actionable, professional feedback or code snippets.
-    - Reference specific DOM elements, CSS styles, or scripts from the snapshot when applicable.
-    - Keep responses concise, structured, and easy to read.
+    - Provide clear, actionable, professional feedback, suggestions, or code ideas.
+    - Reference specific DOM elements, CSS styles, or layout structures from the snapshot when applicable.
+    - If you propose changes or design improvements, clearly explain what will change and explicitly ask the user: "Would you like me to implement these changes into your project?"
+    - Keep responses concise, structured, and friendly.
     """
 ).strip()
+
