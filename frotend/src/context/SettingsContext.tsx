@@ -27,8 +27,15 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       const data = await getApiKeyModel();
       if (data.api_key) setApiKey(data.api_key);
       if (data.model_name) setModelName(data.model_name);
-    } catch {
-      // Unauthenticated or error ignored
+    } catch (err) {
+      const msg = (err as Error).message.toLowerCase();
+      if (
+        msg.includes('401') ||
+        msg.includes('unauthorized') ||
+        msg.includes('not authenticated')
+      ) {
+        logout();
+      }
     }
   };
 

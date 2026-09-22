@@ -37,15 +37,15 @@ type SettingsModalProps = {
 };
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const [tab, setTab] = useState("auth");
+  const { apiKey, setApiKey, modelName, setModelName, isLoggedIn } =
+    useSettings();
+  const [tab, setTab] = useState(isLoggedIn ? "config" : "auth");
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
 
-  const { apiKey, setApiKey, modelName, setModelName, isLoggedIn } =
-    useSettings();
   const { loading, message, setMessage, signIn, signUp, signOut } = useAuth();
   const [saveLoading, setSaveLoading] = useState(false);
 
