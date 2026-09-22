@@ -16,6 +16,7 @@ class LLMStreamConsumer(AsyncJsonWebsocketConsumer):
         try:
             if action == "build":
                 prompt = content.get("prompt")
+                
                 if not prompt:
                     await self.send_json({"type": "error", "message": "'prompt' is required."})
                     return
@@ -28,6 +29,7 @@ class LLMStreamConsumer(AsyncJsonWebsocketConsumer):
                     event_callback=self.send_json,
                 )
                 await self.send_json({"type": "complete", "action": "build", "result": result})
+
 
             elif action == "chat":
                 site_url = content.get("site_url")
