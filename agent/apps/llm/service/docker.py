@@ -56,7 +56,7 @@ class DockerService:
                 "FROM node:20-alpine AS build\n"
                 "WORKDIR /app\n"
                 "COPY package*.json ./\n"
-                "RUN npm install --no-audit --no-fund\n"
+                "RUN npm install --prefer-offline --no-audit --no-fund --loglevel=error\n"
                 "COPY . .\n"
                 "RUN npm run build\n\n"
                 "FROM nginx:alpine\n"

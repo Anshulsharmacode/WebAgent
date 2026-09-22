@@ -81,7 +81,7 @@ class WebsiteAgentService:
         normalized_type = self.llm.normalize_project_type(project_type)
 
         if event_callback:
-            await event_callback({"type": "status", "message": "Generating website files..."})
+            await event_callback({"type": "status", "message": "Calling LLM API to generate website code..."})
 
         clean_name = re.sub(r"[^a-z0-9]+", "-", prompt.lower()[:30]).strip("-") or "generated-site"
         name = project_name or clean_name
@@ -89,9 +89,13 @@ class WebsiteAgentService:
         generated_files = None
         raw_buffer = ""
         prev_file_lengths: dict[str, int] = {}
+        first_chunk = True
 
         async for chunk, final_json in self.llm.stream_generate_website_files(prompt, normalized_type):
             if chunk and event_callback:
+                if first_chunk:
+                    first_chunk = False
+                    await event_callback({"type": "status", "message": "LLM response stream started"})
                 raw_buffer += chunk
                 file_chunks = _extract_file_chunks(raw_buffer)
                 for filename, content in file_chunks:
@@ -149,15 +153,18 @@ class WebsiteAgentService:
 
         # ── Conversational Q&A path ──────────────────────────────────────────
         if not should_apply:
-            if event_callback:
-                await event_callback({"type": "status", "message": "Thinking..."})
-
-            # Fetch snapshot async with short timeout — don't block the LLM start
             snapshot = await self.chat.fetch_site_snapshot(site_url)
 
+            if event_callback:
+                await event_callback({"type": "status", "message": "Calling LLM API (thinking)..."})
+
             full_answer = ""
+            first_chunk = True
             async for chunk in self.llm.stream_chat_about_site(snapshot, message):
                 if chunk:
+                    if first_chunk and event_callback:
+                        first_chunk = False
+                        await event_callback({"type": "status", "message": "LLM response stream started"})
                     full_answer += chunk
                     if event_callback:
                         await event_callback({"type": "chunk", "target": "chat", "content": chunk})
@@ -166,7 +173,7 @@ class WebsiteAgentService:
 
         # ── Apply-changes path ───────────────────────────────────────────────
         if event_callback:
-            await event_callback({"type": "status", "message": "Drafting code updates..."})
+            await event_callback({"type": "status", "message": "Calling LLM API to update website code..."})
 
         existing_files = await sync_to_async(self.docker.read_project_files)(Path(project_dir))
         meta = await sync_to_async(self.docker.get_project_meta)(Path(project_dir))
@@ -175,9 +182,13 @@ class WebsiteAgentService:
         updated_files = None
         raw_buffer = ""
         prev_file_lengths: dict[str, int] = {}
+        first_chunk = True
 
         async for chunk, final_json in self.llm.stream_apply_website_changes(existing_files, message, normalized_type):
             if chunk and event_callback:
+                if first_chunk:
+                    first_chunk = False
+                    await event_callback({"type": "status", "message": "LLM response stream started"})
                 raw_buffer += chunk
                 file_chunks = _extract_file_chunks(raw_buffer)
                 for filename, content in file_chunks:

@@ -33,4 +33,33 @@ class WebsiteAgentServiceTests(TestCase):
             self.assertEqual(res, {"site_url": "http://localhost:5000"})
 
 
+from unittest.mock import AsyncMock
+from apps.llm.consumers import LLMStreamConsumer
+
+
+class LLMStreamConsumerTests(TestCase):
+    async def test_consumer_receive_json_build_logs_and_sends(self):
+        consumer = LLMStreamConsumer()
+        consumer.send_json = AsyncMock()
+
+        with patch("apps.llm.consumers.WebsiteAgentService") as mock_service_cls:
+            mock_service_inst = AsyncMock()
+            mock_service_cls.return_value = mock_service_inst
+            mock_service_inst.stream_create_website.return_value = {"status": "ok"}
+
+            await consumer.receive_json({
+                "action": "build",
+                "prompt": "Create a landing page",
+                "project_name": "test-project",
+            })
+
+            mock_service_inst.stream_create_website.assert_called_once()
+            consumer.send_json.assert_called_with({
+                "type": "complete",
+                "action": "build",
+                "result": {"status": "ok"},
+            })
+
+
+
 

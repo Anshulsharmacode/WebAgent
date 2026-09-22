@@ -230,7 +230,7 @@ class LLMService:
             model=self.model.model_name,
             api_key=self.model.api_key,
             messages=[{"role": "user", "content": prompt_str}],
-            temperature=0.3,
+            temperature=0.2,
             stream=True,
         )
 
@@ -265,7 +265,7 @@ class LLMService:
             model=self.model.model_name,
             api_key=self.model.api_key,
             messages=[{"role": "user", "content": prompt_str}],
-            temperature=0.3,
+            temperature=0.2,
             stream=True,
         )
 
