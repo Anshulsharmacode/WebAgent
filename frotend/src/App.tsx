@@ -3,12 +3,13 @@ import { Sidebar } from "./components/Sidebar";
 import { PreviewPane } from "./components/PreviewPane";
 import { ChatPanel } from "./components/ChatPanel";
 import { SettingsModal } from "./components/SettingsModal";
+import { AuthScreen } from "./components/AuthScreen";
 import { useModal } from "./hooks/useModal";
 import { useSettings } from "./hooks/useSettings";
 import { useWebsiteBuilder } from "./hooks/useWebsiteBuilder";
 
 function App() {
-  const { apiKey, setApiKey, modelName, setModelName } = useSettings();
+  const { isLoggedIn, apiKey, setApiKey, modelName, setModelName } = useSettings();
   const settingsModal = useModal(false);
 
   const {
@@ -34,6 +35,10 @@ function App() {
     handleSend,
     handleStop,
   } = useWebsiteBuilder({ apiKey, modelName });
+
+  if (!isLoggedIn) {
+    return <AuthScreen />;
+  }
 
   return (
     <div className="h-screen w-screen flex flex-col bg-background text-foreground font-sans overflow-hidden">

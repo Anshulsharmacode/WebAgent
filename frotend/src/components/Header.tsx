@@ -1,6 +1,7 @@
-import { Settings, Sparkles } from "lucide-react";
+import { LogOut, Settings, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "../hooks/useAuth";
 
 type HeaderProps = {
   status: string;
@@ -9,6 +10,8 @@ type HeaderProps = {
 };
 
 export function Header({ status, loading, onOpenSettings }: HeaderProps) {
+  const { signOut } = useAuth();
+
   return (
     <header className="h-14 border-b border-border bg-card/80 backdrop-blur-md px-4 md:px-6 flex items-center justify-between shrink-0 z-20">
       {/* Brand */}
@@ -57,6 +60,17 @@ export function Header({ status, loading, onOpenSettings }: HeaderProps) {
         >
           <Settings className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Settings</span>
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={signOut}
+          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 border border-border/40 bg-card/40"
+          title="Sign Out"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Sign Out</span>
         </Button>
       </div>
     </header>
