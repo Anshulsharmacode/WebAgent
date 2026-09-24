@@ -9,7 +9,8 @@ import { useSettings } from "./hooks/useSettings";
 import { useWebsiteBuilder } from "./hooks/useWebsiteBuilder";
 
 function App() {
-  const { isLoggedIn, apiKey, setApiKey, modelName, setModelName } = useSettings();
+  const { isLoggedIn, apiKey, setApiKey, modelName, setModelName } =
+    useSettings();
   const settingsModal = useModal(false);
 
   const {
